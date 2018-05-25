@@ -1262,6 +1262,24 @@ menu "Lua RTOS"
                bool "Include stepper module in build"
                default y
 
+            config LUA_RTOS_LUA_USE_VL53L0X
+               bool "Include VL53L0X based ring"
+               default y
+
+            config VL53L0X_I2C_CHANNEL
+               int "i2c channel to use."
+               range 0 1
+               default 0
+               help
+                  I2C port where VL53L0X is attached
+
+            config VL53L0X_SPEED
+               int "VL53L0X I2C port speed"
+               range 100000 3400000
+               default 400000
+               help
+                 I2C port speed in hertz
+
             config LUA_RTOS_LUA_USE_THREAD
                bool "Include thread module in build"
                default y

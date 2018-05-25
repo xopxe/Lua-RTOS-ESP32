@@ -1,0 +1,118 @@
+#include "sdkconfig.h"
+
+#if CONFIG_LUA_RTOS_LUA_USE_VL53L0X
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/adds.h"
+
+#include "modules.h"
+//#include "error.h"
+
+#ifdef __cplusplus
+  #include "lua.hpp"
+#else
+  #include "lua.h"
+  #include "lualib.h"
+  #include "lauxlib.h"
+#endif
+
+#include <drivers/VL53L0X.h>
+
+typedef struct {
+    int xshut_pin;
+    VL53L0X *vl53l0x;
+} vl53l0x_userdata;
+
+#ifdef __cplusplus
+extern "C"{
+#endif
+
+
+static int lvl53ring_attach( lua_State* L ) {
+    int xshut_pin;
+
+	//driver_error_t *error;
+
+    xshut_pin = luaL_checkinteger( L, 1 );
+    //res = luaL_optinteger( L, 3, 0 );
+
+    vl53l0x_userdata *udata = (vl53l0x_userdata *)lua_newuserdata(L, sizeof(vl53l0x_userdata));
+    if (!udata) return 0;
+    
+    udata->xshut_pin = xshut_pin;
+    udata->vl53l0x = new VL53L0X();
+    
+    luaL_getmetatable(L, "vl53l0x.ins");
+    lua_setmetatable(L, -2);
+
+    return 1;
+}
+
+
+static int lvl53ring_readRangeSingleMillimeters (lua_State *L) {
+	vl53l0x_userdata *userdata = (vl53l0x_userdata *)luaL_checkudata(L, 1, "vl53l0x.ins");
+	//driver_error_t *error;
+    uint16_t val;
+
+    val = userdata->vl53l0x->readRangeSingleMillimeters();
+    lua_pushinteger(L, val);
+
+	return 1;
+}
+
+static int lvl53ring_detach (lua_State *L) {
+	vl53l0x_userdata *userdata = (vl53l0x_userdata *)luaL_checkudata(L, 1, "vl53l0x.ins");
+	//driver_error_t *error;
+
+    delete userdata->vl53l0x;
+
+	return 0;
+}
+static int lvl53ring_gc (lua_State *L) {
+	lvl53ring_detach(L);
+
+	return 0;
+}
+
+static const struct luaL_Reg vl53l0x[] = {
+	{"attach", lvl53ring_attach},
+	{"detach", lvl53ring_detach},
+	{"read_range_single_millimeters", lvl53ring_readRangeSingleMillimeters},
+    {NULL, NULL}
+};
+
+int luaopen_vl53l0x( lua_State *L ) {
+    //luaL_register(L,"vl53l0x", vl53l0x_map);
+    luaL_newlib(L, vl53l0x);
+	return 1;
+}
+
+
+/*
+static const LUA_REG_TYPE vl53l0x_inst_map[] = {
+	{ LSTRKEY( "detach" ),			LFUNCVAL( lvl53ring_detach  ) },
+	{ LSTRKEY( "read_range_single_millimeters" ), LFUNCVAL( lvl53ring_readRangeSingleMillimeters ) },
+    { LSTRKEY( "__metatable" ),	    LROVAL  ( vl53l0x_inst_map ) },
+	{ LSTRKEY( "__index"     ),     LROVAL  ( vl53l0x_inst_map ) },
+    { LSTRKEY( "__gc" ),	 	    LFUNCVAL( lvl53ring_gc 	   ) },
+    { LNILKEY, LNILVAL }
+};
+
+static const LUA_REG_TYPE vl53l0x_map[] = {
+	{ LSTRKEY( "attach" ),			LFUNCVAL( lvl53ring_attach ) },
+    { LNILKEY, LNILVAL }
+};
+
+LUALIB_API int luaopen_vl53l0x( lua_State *L ) {
+    luaL_newmetarotable(L,"vl53l0x.ins", (void *)vl53l0x_inst_map);
+	return 0;
+}
+
+MODULE_REGISTER_ROM(VL53L0X, vl53l0x, vl53l0x_map, luaopen_vl53l0x, 1);
+*/
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
