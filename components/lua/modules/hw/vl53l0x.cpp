@@ -51,12 +51,29 @@ static int lvl53ring_attach( lua_State* L ) {
 
 static int lvl53ring_readRangeSingleMillimeters (lua_State *L) {
 	vl53l0x_userdata *userdata = (vl53l0x_userdata *)luaL_checkudata(L, 1, "vl53l0x.ins");
-	//driver_error_t *error;
+	driver_error_t *error;
     uint16_t val;
+    VL53L0X *vl53l0x = userdata->vl53l0x;
 
-    val = userdata->vl53l0x->readRangeSingleMillimeters();
+
+    val = vl53l0x->readRangeSingleMillimeters();
+
+    if (vl53l0x->timeoutOccurred()) { 
+        lua_pushinteger(L, val);
+        lua_pushstring(L, "timeout");
+        return 2;
+    }
+    if (error = vl53l0x->getI2Cerror()) {
+        //printf("DRIVER ERROR: type: %d, unit: %d, exc: %d\r\n", error->type, error->unit, error->exception);
+        lua_pushnil(L);
+        lua_pushstring(L, "i2c");
+        lua_pushinteger(L, error->type);
+        lua_pushinteger(L, error->unit);
+        lua_pushinteger(L, error->exception);
+        return 5;
+    }
+
     lua_pushinteger(L, val);
-
 	return 1;
 }
 
