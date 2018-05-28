@@ -81,8 +81,8 @@ bool VL53L0X::init(bool io_2v8)
       readReg(VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV) | 0x01); // set bit 0
   }
 
-	uint8_t i2c = CONFIG_VL53RING_I2C_CHANNEL;
-	if ((error=i2c_attach(i2c, I2C_MASTER, CONFIG_VL53RING_SPEED, 0, 0, &i2cdevice))) {
+	uint8_t i2c = CONFIG_VL53L0X_I2C_CHANNEL;
+	if ((error=i2c_attach(i2c, I2C_MASTER, CONFIG_VL53L0X_SPEED, 0, 0, &i2cdevice))) {
 		return false;
 	}
 

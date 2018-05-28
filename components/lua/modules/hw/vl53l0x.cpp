@@ -28,7 +28,7 @@ extern "C"{
 #endif
 
 
-static int lvl53ring_attach( lua_State* L ) {
+static int lvl53l0x_attach( lua_State* L ) {
     int xshut_pin;
 
 	//driver_error_t *error;
@@ -48,8 +48,37 @@ static int lvl53ring_attach( lua_State* L ) {
     return 1;
 }
 
+//static int process_i2c_error(lua_State *L, VL53L0X &vl53l0x) {
+//}
 
-static int lvl53ring_readRangeSingleMillimeters (lua_State *L) {
+static int lvl53l0x_init (lua_State *L) {
+	vl53l0x_userdata *userdata = (vl53l0x_userdata *)luaL_checkudata(L, 1, "vl53l0x.ins");
+	driver_error_t *error;
+    VL53L0X *vl53l0x = userdata->vl53l0x;
+
+
+    bool ok = vl53l0x->init();
+
+    if (~ok) { 
+        lua_pushnil(L);
+        lua_pushstring(L, "internal failure");
+        return 2;
+    }
+    if ( (error = vl53l0x->getI2Cerror() )) {
+        //printf("DRIVER ERROR: type: %d, unit: %d, exc: %d\r\n", error->type, error->unit, error->exception);
+        lua_pushnil(L);
+        lua_pushstring(L, "i2c");
+        lua_pushinteger(L, error->type);
+        lua_pushinteger(L, error->unit);
+        lua_pushinteger(L, error->exception);
+        return 5;
+    }
+
+    lua_pushboolean(L, true);
+	return 1;
+}
+
+static int lvl53l0x_readRangeSingleMillimeters (lua_State *L) {
 	vl53l0x_userdata *userdata = (vl53l0x_userdata *)luaL_checkudata(L, 1, "vl53l0x.ins");
 	driver_error_t *error;
     uint16_t val;
@@ -63,7 +92,7 @@ static int lvl53ring_readRangeSingleMillimeters (lua_State *L) {
         lua_pushstring(L, "timeout");
         return 2;
     }
-    if (error = vl53l0x->getI2Cerror()) {
+    if ( (error = vl53l0x->getI2Cerror() )) {
         //printf("DRIVER ERROR: type: %d, unit: %d, exc: %d\r\n", error->type, error->unit, error->exception);
         lua_pushnil(L);
         lua_pushstring(L, "i2c");
@@ -77,7 +106,7 @@ static int lvl53ring_readRangeSingleMillimeters (lua_State *L) {
 	return 1;
 }
 
-static int lvl53ring_detach (lua_State *L) {
+static int lvl53l0x_detach (lua_State *L) {
 	vl53l0x_userdata *userdata = (vl53l0x_userdata *)luaL_checkudata(L, 1, "vl53l0x.ins");
 	//driver_error_t *error;
 
@@ -85,16 +114,18 @@ static int lvl53ring_detach (lua_State *L) {
 
 	return 0;
 }
-static int lvl53ring_gc (lua_State *L) {
-	lvl53ring_detach(L);
-
+/*
+static int lvl53l0x_gc (lua_State *L) {
+	lvl53l0x_detach(L);
 	return 0;
 }
+*/
 
 static const struct luaL_Reg vl53l0x[] = {
-	{"attach", lvl53ring_attach},
-	{"detach", lvl53ring_detach},
-	{"read_range_single_millimeters", lvl53ring_readRangeSingleMillimeters},
+	{"attach", lvl53l0x_attach},
+	{"detach", lvl53l0x_detach},
+	{"init", lvl53l0x_init},
+	{"read_range_single_millimeters", lvl53l0x_readRangeSingleMillimeters},
     {NULL, NULL}
 };
 
@@ -107,16 +138,16 @@ int luaopen_vl53l0x( lua_State *L ) {
 
 /*
 static const LUA_REG_TYPE vl53l0x_inst_map[] = {
-	{ LSTRKEY( "detach" ),			LFUNCVAL( lvl53ring_detach  ) },
-	{ LSTRKEY( "read_range_single_millimeters" ), LFUNCVAL( lvl53ring_readRangeSingleMillimeters ) },
+	{ LSTRKEY( "detach" ),			LFUNCVAL( lvl53l0x_detach  ) },
+	{ LSTRKEY( "read_range_single_millimeters" ), LFUNCVAL( lvl53l0x_readRangeSingleMillimeters ) },
     { LSTRKEY( "__metatable" ),	    LROVAL  ( vl53l0x_inst_map ) },
 	{ LSTRKEY( "__index"     ),     LROVAL  ( vl53l0x_inst_map ) },
-    { LSTRKEY( "__gc" ),	 	    LFUNCVAL( lvl53ring_gc 	   ) },
+    { LSTRKEY( "__gc" ),	 	    LFUNCVAL( lvl53l0x_gc 	   ) },
     { LNILKEY, LNILVAL }
 };
 
 static const LUA_REG_TYPE vl53l0x_map[] = {
-	{ LSTRKEY( "attach" ),			LFUNCVAL( lvl53ring_attach ) },
+	{ LSTRKEY( "attach" ),			LFUNCVAL( lvl53l0x_attach ) },
     { LNILKEY, LNILVAL }
 };
 
