@@ -113,8 +113,8 @@ class VL53L0X
     uint16_t readReg16Bit(uint8_t reg);
     uint32_t readReg32Bit(uint8_t reg);
 
-    void writeMulti(uint8_t reg, uint8_t const * src, uint8_t count);
-    void readMulti(uint8_t reg, uint8_t * dst, uint8_t count);
+    int writeMulti(uint8_t reg, uint8_t const * src, uint8_t count);
+    int readMulti(uint8_t reg, uint8_t * dst, uint8_t count);
 
     bool setSignalRateLimit(float limit_Mcps);
     float getSignalRateLimit(void);
@@ -134,14 +134,10 @@ class VL53L0X
     inline uint16_t getTimeout(void) { return io_timeout; }
     bool timeoutOccurred(void);
 
-    driver_error_t *getI2Cerror();
-
   private:
     // TCC: Target CentreCheck
     // MSRC: Minimum Signal Rate Check
     // DSS: Dynamic Spad Selection
-
-    driver_error_t *error; // error for i2c communications, see getI2Cerror()
 
     struct SequenceStepEnables
     {

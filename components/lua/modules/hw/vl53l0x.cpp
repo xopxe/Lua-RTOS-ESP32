@@ -2,6 +2,12 @@
 
 #if CONFIG_LUA_RTOS_LUA_USE_VL53L0X
 
+
+#ifdef __cplusplus
+extern "C"{
+#endif
+
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/adds.h"
 
@@ -22,11 +28,6 @@ typedef struct {
     int xshut_pin;
     VL53L0X *vl53l0x;
 } vl53l0x_userdata;
-
-#ifdef __cplusplus
-extern "C"{
-#endif
-
 
 static int lvl53l0x_attach( lua_State* L ) {
     int xshut_pin;
@@ -121,7 +122,7 @@ static int lvl53l0x_gc (lua_State *L) {
 }
 */
 
-static const struct luaL_Reg vl53l0x[] = {
+static const luaL_Reg vl53l0x[] = {
 	{"attach", lvl53l0x_attach},
 	{"detach", lvl53l0x_detach},
 	{"init", lvl53l0x_init},
@@ -129,12 +130,13 @@ static const struct luaL_Reg vl53l0x[] = {
     {NULL, NULL}
 };
 
-int luaopen_vl53l0x( lua_State *L ) {
+LUALIB_API int luaopen_vl53l0x( lua_State *L ) {
     //luaL_register(L,"vl53l0x", vl53l0x_map);
     luaL_newlib(L, vl53l0x);
 	return 1;
 }
 
+MODULE_REGISTER_RAM(VL53L0X, vl53l0x, luaopen_vl53l0x, 1);
 
 /*
 static const LUA_REG_TYPE vl53l0x_inst_map[] = {

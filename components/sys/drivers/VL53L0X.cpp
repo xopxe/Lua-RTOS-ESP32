@@ -5,7 +5,11 @@
 
 
 #include "sdkconfig.h"
-#if CONFIG_LUA_RTOS_LUA_USE_VL53L0X
+#if CONFIG_LUA_RTOS_LUA_USE_VL53L0X | CONFIG_LUA_RTOS_LUA_USE_VL53RING
+
+#ifdef __cplusplus
+extern "C"{
+#endif
 
 #include <drivers/VL53L0X.h>
 //#include <Wire.h>
@@ -44,6 +48,11 @@
 // PLL_period_ps = 1655; macro_period_vclks = 2304
 #define calcMacroPeriod(vcsel_period_pclks) ((((uint32_t)2304 * (vcsel_period_pclks) * 1655) + 500) / 1000)
 
+static void print_driver_error(driver_error_t *error, int err) {
+	printf(" DRIVER ERROR [%d]: type: %d, unit: %d, exc: %d\r\n", err, error->type, error->unit, error->exception);
+  free(error);
+}
+
 
 // Constructors ////////////////////////////////////////////////////////////////
 
@@ -52,6 +61,7 @@ VL53L0X::VL53L0X(void)
   , io_timeout(0) // no timeout
   , did_timeout(false)
 {
+  printf("In: VL53L0X::VL53L0X(void)\r\n");
 }
 
 // Public Methods //////////////////////////////////////////////////////////////
@@ -73,26 +83,36 @@ void VL53L0X::setAddress(uint8_t new_addr)
 bool VL53L0X::init(bool io_2v8)
 {
   // VL53L0X_DataInit() begin
+  printf("In: VL53L0X::init(bool io_2v8)\r\n");
 
+  driver_error_t *error;
+
+  /*
   // sensor uses 1V8 mode for I/O by default; switch to 2V8 mode if necessary
   if (io_2v8)
   {
     writeReg(VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV,
       readReg(VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV) | 0x01); // set bit 0
   }
+  */
 
 	uint8_t i2c = CONFIG_VL53L0X_I2C_CHANNEL;
 	if ((error=i2c_attach(i2c, I2C_MASTER, CONFIG_VL53L0X_SPEED, 0, 0, &i2cdevice))) {
-		return false;
-	}
+    	print_driver_error(error, -10);
+    	return false;
+  }
 
   // "Set I2C standard mode"
+  printf("will: writeReg(0x88, 0x00);\r\n");
   writeReg(0x88, 0x00);
+  printf("done: writeReg(0x88, 0x00);\r\n");
 
   writeReg(0x80, 0x01);
   writeReg(0xFF, 0x01);
   writeReg(0x00, 0x00);
+  printf("will: readReg(0x91);");
   stop_variable = readReg(0x91);
+  printf("will: readReg(0x91);");
   writeReg(0x00, 0x01);
   writeReg(0xFF, 0x00);
   writeReg(0x80, 0x00);
@@ -296,6 +316,50 @@ bool VL53L0X::init(bool io_2v8)
   return true;
 }
 
+
+// Write an arbitrary number of bytes from the given array to the sensor,
+// starting at the given register
+int VL53L0X::writeMulti(uint8_t reg, uint8_t const * src, uint8_t count)
+{
+  /*
+  Wire.beginTransmission(address);
+  Wire.write(reg);
+
+  while (count-- > 0)
+  {
+    Wire.write(*(src++));
+  }
+
+  last_status = Wire.endTransmission();
+  */
+	printf("In: int VL53L0X::writeMulti reg: %d, src[0]: %d, count: %d\r\n", reg, src[0], count);
+
+
+  driver_error_t *error;
+	int transaction = I2C_TRANSACTION_INITIALIZER;
+	if ((error = i2c_start(i2cdevice, &transaction))) {
+    	print_driver_error(error, -1);
+    	return -1;
+  }
+//printf("2\r\n");
+	if ((error = i2c_write_address(i2cdevice, &transaction, address, 0))) {
+    	print_driver_error(error, -2);
+    	return -2;
+  }
+//printf("3\r\n");
+	if ((error = i2c_write(i2cdevice, &transaction, (char*)src, count))) {
+    	print_driver_error(error, -3);
+    	return -3;
+  }
+//printf("4\r\n");
+	if ((error = i2c_stop(i2cdevice, &transaction))) {
+    	print_driver_error(error, -4);
+    	return -4;
+  }
+	printf("Out: int VL53L0X::writeMulti reg: %d, src[0]: %d, count: %d\r\n", reg, src[0], count);
+  return 0;
+}
+
 // Write an 8-bit register
 void VL53L0X::writeReg(uint8_t reg, char value)
 {
@@ -304,11 +368,7 @@ void VL53L0X::writeReg(uint8_t reg, char value)
   //Wire.write(value);
   //last_status = Wire.endTransmission();
 
-	int transaction = I2C_TRANSACTION_INITIALIZER;
-	error = i2c_start(i2cdevice, &transaction);if (error) return;
-	error = i2c_write_address(i2cdevice, &transaction, address, 0);if (error) return;
-	error = i2c_write(i2cdevice, &transaction, &value, 1);if (error) return;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return;
+  writeMulti(reg, (uint8_t*) &value, 1);
 }
 
 // Write a 16-bit register
@@ -320,11 +380,7 @@ void VL53L0X::writeReg16Bit(uint8_t reg, uint16_t value)
   //Wire.write( value       & 0xFF); // value low byte
   //last_status = Wire.endTransmission();
 
-	int transaction = I2C_TRANSACTION_INITIALIZER;
-	error = i2c_start(i2cdevice, &transaction);if (error) return;
-	error = i2c_write_address(i2cdevice, &transaction, address, 0);if (error) return;
-	error = i2c_write(i2cdevice, &transaction, (char*)&value, 2);if (error) return;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return;
+  writeMulti(reg, (uint8_t*)&value, 2);
 }
 
 // Write a 32-bit register
@@ -338,11 +394,62 @@ void VL53L0X::writeReg32Bit(uint8_t reg, uint32_t value)
   //Wire.write( value        & 0xFF); // value lowest byte
   //last_status = Wire.endTransmission();
 
+  writeMulti(reg, (uint8_t*)&value, 4);
+}
+
+// Read an arbitrary number of bytes from the sensor, starting at the given
+// register, into the given array
+int VL53L0X::readMulti(uint8_t reg, uint8_t * dst, uint8_t count)
+{
+  /*
+  Wire.beginTransmission(address);
+  Wire.write(reg);
+  last_status = Wire.endTransmission();
+
+  Wire.requestFrom(address, count);
+
+  while (count-- > 0)
+  {
+    *(dst++) = Wire.read();
+  }
+  */
+
+  driver_error_t *error;
 	int transaction = I2C_TRANSACTION_INITIALIZER;
-	error = i2c_start(i2cdevice, &transaction);if (error) return;
-	error = i2c_write_address(i2cdevice, &transaction, address, 0);if (error) return;
-	error = i2c_write(i2cdevice, &transaction, (char*)&value, 4);if (error) return;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return;
+
+	if ((error=i2c_start(i2cdevice, &transaction))) {
+    	print_driver_error(error, -1);
+    	return -1;
+  }
+	if ((error = i2c_write_address(i2cdevice, &transaction, address, 0))) {
+    	print_driver_error(error, -2);
+    	return -2;
+  }	
+  if ((error = i2c_write(i2cdevice, &transaction, (char *)&reg, 1))) {
+    	print_driver_error(error, -3);
+    	return -3;
+  }	
+  if ((error = i2c_stop(i2cdevice, &transaction))) {
+    	print_driver_error(error, -4);
+    	return -4;
+  }
+
+	if ((error = i2c_start(i2cdevice, &transaction))) {
+    	print_driver_error(error, -1);
+    	return -1;
+  }
+	if ((error = i2c_write_address(i2cdevice, &transaction, address, 1))) {
+    	print_driver_error(error, -2);
+    	return -2;
+  }	if ((error = i2c_read(i2cdevice, &transaction, (char *)dst, count))) {
+    	print_driver_error(error, -3);
+    	return -3;
+  }	if ((error = i2c_stop(i2cdevice, &transaction))) {
+    	print_driver_error(error, -4);
+    	return -4;
+  }
+
+  return 0;
 }
 
 // Read an 8-bit register
@@ -360,17 +467,7 @@ uint8_t VL53L0X::readReg(uint8_t reg)
   return value;*/
 
   uint8_t value;
-	int transaction = I2C_TRANSACTION_INITIALIZER;
-	error = i2c_start(i2cdevice, &transaction);if (error) return 0;
-	error = i2c_write_address(i2cdevice, &transaction, address, 0);if (error) return 0;
-	error = i2c_write(i2cdevice, &transaction, (char *)&reg, 1);if (error) return 0;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return 0;
-
-	error = i2c_start(i2cdevice, &transaction);if (error) return 0;
-	error = i2c_write_address(i2cdevice, &transaction, address, 1);if (error) return 0;
-	error = i2c_read(i2cdevice, &transaction, (char *)&value, 1);if (error) return 0;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return 0;
-
+  readMulti(reg, &value, 1);
   return value;
 }
 
@@ -389,17 +486,7 @@ uint16_t VL53L0X::readReg16Bit(uint8_t reg)
   */
 
   uint16_t value;
-	int transaction = I2C_TRANSACTION_INITIALIZER;
-	error = i2c_start(i2cdevice, &transaction);if (error) return 0;
-	error = i2c_write_address(i2cdevice, &transaction, address, 0);if (error) return 0;
-	error = i2c_write(i2cdevice, &transaction, (char *)&reg, 1);if (error) return 0;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return 0;
-
-	error = i2c_start(i2cdevice, &transaction);if (error) return 0;
-	error = i2c_write_address(i2cdevice, &transaction, address, 1);if (error) return 0;
-	error = i2c_read(i2cdevice, &transaction, (char *)&value, 2);if (error) return 0;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return 0;
-
+  readMulti(reg, (uint8_t *)&value, 2);
   return value;
 }
 
@@ -420,76 +507,11 @@ uint32_t VL53L0X::readReg32Bit(uint8_t reg)
   */
 
   uint32_t value;
-	int transaction = I2C_TRANSACTION_INITIALIZER;
-	error = i2c_start(i2cdevice, &transaction);if (error) return 0;
-	error = i2c_write_address(i2cdevice, &transaction, address, 0);if (error) return 0;
-	error = i2c_write(i2cdevice, &transaction, (char *)&reg, 1);if (error) return 0;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return 0;
-
-	error = i2c_start(i2cdevice, &transaction);if (error) return 0;
-	error = i2c_write_address(i2cdevice, &transaction, address, 1);if (error) return 0;
-	error = i2c_read(i2cdevice, &transaction, (char *)&value, 4);if (error) return 0;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return 0;
-  
+  readMulti(reg, (uint8_t *)&value, 4);
   return value;
 }
 
-// Write an arbitrary number of bytes from the given array to the sensor,
-// starting at the given register
-void VL53L0X::writeMulti(uint8_t reg, uint8_t const * src, uint8_t count)
-{
-  /*
-  Wire.beginTransmission(address);
-  Wire.write(reg);
 
-  while (count-- > 0)
-  {
-    Wire.write(*(src++));
-  }
-
-  last_status = Wire.endTransmission();
-  */
-
-	int transaction = I2C_TRANSACTION_INITIALIZER;
-	error = i2c_start(i2cdevice, &transaction);if (error) return;
-	error = i2c_write_address(i2cdevice, &transaction, address, 0);if (error) return;
-	error = i2c_write(i2cdevice, &transaction, (char*)src, count);if (error) return;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return;
-}
-
-// Read an arbitrary number of bytes from the sensor, starting at the given
-// register, into the given array
-void VL53L0X::readMulti(uint8_t reg, uint8_t * dst, uint8_t count)
-{
-  /*
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  last_status = Wire.endTransmission();
-
-  Wire.requestFrom(address, count);
-
-  while (count-- > 0)
-  {
-    *(dst++) = Wire.read();
-  }
-  */
-	int transaction = I2C_TRANSACTION_INITIALIZER;
-	error = i2c_start(i2cdevice, &transaction);if (error) return;
-	error = i2c_write_address(i2cdevice, &transaction, address, 0);if (error) return;
-	error = i2c_write(i2cdevice, &transaction, (char *)&reg, 1);if (error) return;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return;
-
-	error = i2c_start(i2cdevice, &transaction);if (error) return;
-	error = i2c_write_address(i2cdevice, &transaction, address, 1);if (error) return;
-	error = i2c_read(i2cdevice, &transaction, (char *)dst, count);if (error) return;
-	error = i2c_stop(i2cdevice, &transaction);if (error) return;
-}
-
-driver_error_t* VL53L0X::getI2Cerror() {
-  driver_error_t *temp = error;
-  error = NULL;
-  return temp;
-}
 
 // Set the return signal rate limit check value in units of MCPS (mega counts
 // per second). "This represents the amplitude of the signal reflected from the
@@ -1136,5 +1158,9 @@ bool VL53L0X::performSingleRefCalibration(uint8_t vhv_init_byte)
 
   return true;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
