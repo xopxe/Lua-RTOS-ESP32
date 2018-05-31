@@ -25,7 +25,7 @@ extern "C"{
 
 #define NSENSORS 1
 #define XSHUT_PINS {19,13,14,15,16,17}
-#define REMAPADDRESS {0b0101001, 0x11,0x12,0x13,0x14,0x15}
+#define REMAPADDRESS {0, 0x11,0x12,0x13,0x14,0x15}
 
 
 typedef struct {
@@ -50,9 +50,6 @@ static int lvl53ring_init (lua_State *L) {
         int pin = xshut_pins[i];
         sensors[i].xshut_pin = pin;
 
-        //sensors[i].vl53l0x = new VL53L0X();
-     
-        
         if ((error = gpio_pin_output(pin))) {
             lua_pushnil(L);
             lua_pushstring(L, "error setting pin to out");
@@ -89,9 +86,9 @@ static int lvl53ring_init (lua_State *L) {
             return 2;
         }
 
-        /*
-        sensors[i].vl53l0x->setAddress(remapaddress[i]);
-        */
+        if (remapaddress[i]>0 && remapaddress[i]!=sensors[i].vl53l0x.getAddress()) {
+            sensors[i].vl53l0x.setAddress(remapaddress[i]);
+        }
         
     }
 
@@ -119,7 +116,7 @@ static int lvl53ring_read (lua_State *L) {
 }
 
 static int lvl53ring_test (lua_State *L) {
-	driver_error_t *error;
+	//driver_error_t *error;
 
     VL53L0X *vl53l0x = &(sensors[0].vl53l0x);
     uint16_t val;

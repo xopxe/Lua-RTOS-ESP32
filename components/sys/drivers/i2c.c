@@ -179,11 +179,11 @@ static driver_error_t *i2c_unlock_resources(int unit) {
 static driver_error_t *i2c_check(int unit) {
     // Sanity checks
     if (!((1 << unit) & CPU_I2C_ALL)) {
-        return driver_error(I2C_DRIVER, I2C_ERR_INVALID_UNIT, NULL);
+        return driver_error(I2C_DRIVER, I2C_ERR_INVALID_UNIT, "invalid unit");
     }
 
     if (!i2c[unit].setup) {
-        return driver_error(I2C_DRIVER, I2C_ERR_IS_NOT_SETUP, NULL);
+        return driver_error(I2C_DRIVER, I2C_ERR_IS_NOT_SETUP, "unit not setup");
     }
 
     return NULL;
@@ -245,10 +245,10 @@ static driver_error_t *i2c_flush_internal(int unit, int device,
 
     if (err == ESP_FAIL) {
         i2c_unlock(unit);
-        return driver_error(I2C_DRIVER, I2C_ERR_NOT_ACK, NULL);
+        return driver_error(I2C_DRIVER, I2C_ERR_NOT_ACK, "flush no ack");
     } else if (err == ESP_ERR_TIMEOUT) {
         i2c_unlock(unit);
-        return driver_error(I2C_DRIVER, I2C_ERR_TIMEOUT, NULL);
+        return driver_error(I2C_DRIVER, I2C_ERR_TIMEOUT, "flush timeout");
     }
 
     return NULL;
@@ -549,7 +549,7 @@ driver_error_t *i2c_stop(int deviceid, int *transaction) {
     i2c_cmd_handle_t cmd;
     if (lstget(&transactions, *transaction, (void **) &cmd)) {
         i2c_unlock(unit);
-        return driver_error(I2C_DRIVER, I2C_ERR_INVALID_TRANSACTION, NULL);
+        return driver_error(I2C_DRIVER, I2C_ERR_INVALID_TRANSACTION, "invalid transaction");
     }
 
     if (i2c[unit].device[device].reading) {
