@@ -70,7 +70,6 @@ static int lvl53ring_init (lua_State *L) {
     for (int i=0; i<NSENSORS; i++) {
         int pin = xshut_pins[i];
 
-        
         if ((error = gpio_pin_clr(pin))) {
             lua_pushnil(L);
             lua_pushstring(L, "error clearing pin");
@@ -91,7 +90,6 @@ static int lvl53ring_init (lua_State *L) {
         }
         
     }
-
 
     lua_pushboolean(L, true);
 	return 1;
@@ -116,8 +114,6 @@ static int lvl53ring_read (lua_State *L) {
 }
 
 static int lvl53ring_test (lua_State *L) {
-	//driver_error_t *error;
-
     VL53L0X *vl53l0x = &(sensors[0].vl53l0x);
     uint16_t val;
 
@@ -134,6 +130,54 @@ static int lvl53ring_test (lua_State *L) {
 	return 1;
 }
 
+static int lvl53ring_set_timeout (lua_State *L) {
+    uint16_t timeout = luaL_checkinteger( L, 1 );
+
+    for (int i=0; i<NSENSORS; i++) {
+        sensors[i].vl53l0x.setTimeout(timeout);
+    }
+
+    lua_pushboolean(L, true);
+	return 1;
+}
+
+static int lvl53ring_set_measurement_timing_budget (lua_State *L) {
+    uint16_t us = luaL_checkinteger( L, 1 );
+
+    for (int i=0; i<NSENSORS; i++) {
+        sensors[i].vl53l0x.setMeasurementTimingBudget(us);
+    }
+
+    lua_pushboolean(L, true);
+	return 1;
+}
+
+static int lvl53ring_set_continuous_mode (lua_State *L) {
+    bool enable =  lua_toboolean( L, 1 );
+
+    if (enable) {
+        uint16_t ms = luaL_checkinteger( L, 2 );
+        for (int i=0; i<NSENSORS; i++) {
+            sensors[i].vl53l0x.startContinuous(ms);
+        }
+    } else {
+        for (int i=0; i<NSENSORS; i++) {
+            sensors[i].vl53l0x.stopContinuous();
+        }
+    }
+
+    lua_pushboolean(L, true);
+	return 1;
+}
+
+static int lvl53ring_get_continuous_distance (lua_State *L) {
+    for (int i=0; i<NSENSORS; i++) {
+        uint16_t dist = sensors[i].vl53l0x.readRangeContinuousMillimeters();
+        lua_pushinteger(L, dist);
+    }
+	return NSENSORS;
+}
+
 
 static const luaL_Reg vl53ring[] = {
 //	{"attach", lvl53l0x_attach},
@@ -141,6 +185,10 @@ static const luaL_Reg vl53ring[] = {
 	{"init", lvl53ring_init},
 	{"read", lvl53ring_read},
 	{"test", lvl53ring_test},
+	{"set_timeout", lvl53ring_set_timeout},
+	{"set_measurement_timing_budget", lvl53ring_set_measurement_timing_budget},
+	{"set_continuous_mode", lvl53ring_set_continuous_mode},
+	{"get_continuous_reading", lvl53ring_get_continuous_distance},
     {NULL, NULL}
 };
 

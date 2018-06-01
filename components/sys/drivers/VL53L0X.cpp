@@ -115,9 +115,7 @@ bool VL53L0X::init(bool io_2v8)
   writeReg(0x80, 0x01);
   writeReg(0xFF, 0x01);
   writeReg(0x00, 0x00);
-  printf("will: readReg(0x91);\r\n");
   stop_variable = readReg(0x91);
-  printf("will: readReg(0x91);\r\n");
   writeReg(0x00, 0x01);
   writeReg(0xFF, 0x00);
   writeReg(0x80, 0x00);
@@ -346,22 +344,22 @@ int VL53L0X::writeMulti(uint8_t reg, uint8_t const * src, uint8_t count)
     	print_driver_error(error, -1);
     	return -1;
   }
-//printf("2\r\n");
+
 	if ((error = i2c_write_address(i2cdevice, &transaction, address, 0))) {
     	print_driver_error(error, -2);
     	return -2;
   }
-//printf("3\r\n");
+
 	if ((error = i2c_write(i2cdevice, &transaction, (char*)&reg, 1))) {
     	print_driver_error(error, -3);
     	return -3;
   }
-//printf("4\r\n");
+
 	if ((error = i2c_write(i2cdevice, &transaction, (char*)src, count))) {
     	print_driver_error(error, -4);
     	return -4;
   }
-//printf("5\r\n");
+
 	if ((error = i2c_stop(i2cdevice, &transaction))) {
     	print_driver_error(error, -5);
     	return -5;
