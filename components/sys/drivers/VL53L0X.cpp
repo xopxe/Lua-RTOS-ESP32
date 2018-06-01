@@ -11,6 +11,7 @@
 extern "C"{
 #endif
 
+#include <byteswap.h>
 #include <drivers/VL53L0X.h>
 //#include <Wire.h>
 
@@ -102,8 +103,8 @@ bool VL53L0X::init(bool io_2v8)
   // sensor uses 1V8 mode for I/O by default; switch to 2V8 mode if necessary
   if (io_2v8)
   {
-//    writeReg(VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV,
-//      readReg(VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV) | 0x01); // set bit 0
+    writeReg(VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV,
+      readReg(VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV) | 0x01); // set bit 0
   }
 
   // "Set I2C standard mode"
@@ -390,7 +391,8 @@ void VL53L0X::writeReg16Bit(uint8_t reg, uint16_t value)
   //Wire.write( value       & 0xFF); // value low byte
   //last_status = Wire.endTransmission();
 
-  writeMulti(reg, (uint8_t*)&value, 2);
+  uint16_t buff = __bswap_16 (value);
+  writeMulti(reg, (uint8_t*)&buff, 2);
 }
 
 // Write a 32-bit register
@@ -404,7 +406,8 @@ void VL53L0X::writeReg32Bit(uint8_t reg, uint32_t value)
   //Wire.write( value        & 0xFF); // value lowest byte
   //last_status = Wire.endTransmission();
 
-  writeMulti(reg, (uint8_t*)&value, 4);
+  uint32_t buff = __bswap_32 (value);
+  writeMulti(reg, (uint8_t*)&buff, 4);
 }
 
 // Read an arbitrary number of bytes from the sensor, starting at the given
@@ -497,7 +500,7 @@ uint16_t VL53L0X::readReg16Bit(uint8_t reg)
 
   uint16_t value;
   readMulti(reg, (uint8_t *)&value, 2);
-  return value;
+  return __bswap_16 (value);
 }
 
 // Read a 32-bit register
@@ -518,7 +521,7 @@ uint32_t VL53L0X::readReg32Bit(uint8_t reg)
 
   uint32_t value;
   readMulti(reg, (uint8_t *)&value, 4);
-  return value;
+  return __bswap_32 (value);
 }
 
 
