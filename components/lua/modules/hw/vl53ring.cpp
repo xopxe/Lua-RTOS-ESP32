@@ -23,9 +23,9 @@ extern "C"{
 #include <drivers/VL53L0X.h>
 #include <drivers/gpio.h>
 
-#define NSENSORS 1
-#define XSHUT_PINS {19,13,14,15,16,17}
-#define REMAPADDRESS {0, 0x11,0x12,0x13,0x14,0x15}
+#define NSENSORS 2
+#define XSHUT_PINS {16,17}
+#define REMAPADDRESS {42, 43}  // {0x2A, 0x2B}
 
 
 typedef struct {
@@ -56,20 +56,6 @@ static int lvl53ring_init (lua_State *L) {
             lua_pushinteger(L, pin);
         	return 3;
         }
-        if ((error = gpio_pin_set(pin))) {
-            lua_pushnil(L);
-            lua_pushstring(L, "error setting pin");
-            lua_pushinteger(L, pin);
-        	return 3;
-        }
-        
-    }
-
-
-    //init sensors and renumber        
-    for (int i=0; i<NSENSORS; i++) {
-        int pin = xshut_pins[i];
-
         if ((error = gpio_pin_clr(pin))) {
             lua_pushnil(L);
             lua_pushstring(L, "error clearing pin");
@@ -77,16 +63,34 @@ static int lvl53ring_init (lua_State *L) {
         	return 3;
         }
         
-        bool ok = sensors[i].vl53l0x.init();
-        printf("done: bool ok = sensors[i].vl53l0x.init();");
-        if (~ok) { 
+    }
+    usleep(50*1000);
+
+    //init sensors and renumber        
+    for (int i=0; i<NSENSORS; i++) {
+        int pin = xshut_pins[i];
+
+        if ((error = gpio_pin_set(pin))) {
             lua_pushnil(L);
+            lua_pushstring(L, "error setting pin");
+            lua_pushinteger(L, pin);
+        	return 3;
+        }
+        
+        usleep(50*1000);
+        bool ok = sensors[i].vl53l0x.init();
+        //printf("done: bool ok = sensors[i].vl53l0x.init();");
+        if (~ok) { 
+            /*lua_pushnil(L);
             lua_pushstring(L, "internal sensor failure");
-            return 2;
+            return 2;*/
+            printf("warning: internal sensor failure\r\n");
         }
 
+        //printf("i2c remapping check %d renumber to %d\r\n", sensors[i].vl53l0x.getAddress(), remapaddress[i] );
         if (remapaddress[i]>0 && remapaddress[i]!=sensors[i].vl53l0x.getAddress()) {
             sensors[i].vl53l0x.setAddress(remapaddress[i]);
+            printf("i2c %d renumbered to %d\r\n", i, remapaddress[i] );
         }
         
     }
