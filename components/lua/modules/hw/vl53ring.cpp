@@ -30,7 +30,7 @@ extern "C"{
 
 
 TimerHandle_t vl53ring_get_timer;
-int tmr_callback=LUA_REFNIL;
+int vl53ring_get_callback=LUA_REFNIL;
 
 typedef struct {
     int xshut_pin;
@@ -40,7 +40,7 @@ typedef struct {
 
 static sensor_t sensors[NSENSORS];
 
-static void callback_sw_func(TimerHandle_t xTimer) {
+static void callback_sw_dist(TimerHandle_t xTimer) {
 	lua_State *TL;
 	lua_State *L;
 	int tref;
@@ -50,7 +50,7 @@ static void callback_sw_func(TimerHandle_t xTimer) {
 
     tref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-    lua_rawgeti(L, LUA_REGISTRYINDEX, tmr_callback);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, vl53ring_get_callback);
     lua_xmove(L, TL, 1);
 
     //push reading
@@ -188,7 +188,7 @@ static int lvl53ring_set_measurement_timing_budget (lua_State *L) {
 static int lvl53ring_get_continuous (lua_State *L) {
     bool enable = lua_toboolean(L, 1);
     if (enable) {
-        if (tmr_callback!=LUA_REFNIL) {
+        if (vl53ring_get_callback!=LUA_REFNIL) {
             lua_pushnil(L);
             lua_pushstring(L, "continuos get already running");
             return 2;
@@ -209,11 +209,11 @@ static int lvl53ring_get_continuous (lua_State *L) {
         //set timer for callback
 	    luaL_checktype(L, 2, LUA_TFUNCTION);
         lua_pushvalue(L, 2);
-        tmr_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-        vl53ring_get_timer = xTimerCreate("vl53ring", millis / portTICK_PERIOD_MS, pdTRUE, (void *)vl53ring_get_timer, callback_sw_func);
+        vl53ring_get_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+        vl53ring_get_timer = xTimerCreate("vl53ring", millis / portTICK_PERIOD_MS, pdTRUE, (void *)vl53ring_get_timer, callback_sw_dist);
         xTimerStart(vl53ring_get_timer, 0);
     } else {
-        if (tmr_callback==LUA_REFNIL) {
+        if (vl53ring_get_callback==LUA_REFNIL) {
             lua_pushnil(L);
             lua_pushstring(L, "no continuos get running");
             return 2;
@@ -227,7 +227,7 @@ static int lvl53ring_get_continuous (lua_State *L) {
         //delete timer
         xTimerStop(vl53ring_get_timer, portMAX_DELAY);
 		xTimerDelete(vl53ring_get_timer, portMAX_DELAY);
-        tmr_callback=LUA_REFNIL;
+        vl53ring_get_callback=LUA_REFNIL;
     }
 
     lua_pushboolean(L, true);

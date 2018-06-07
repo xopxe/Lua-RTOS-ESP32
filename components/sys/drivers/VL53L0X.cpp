@@ -50,22 +50,6 @@ extern "C"{
 #define calcMacroPeriod(vcsel_period_pclks) ((((uint32_t)2304 * (vcsel_period_pclks) * 1655) + 500) / 1000)
 
 
-void VL53L0X::writeReg(uint8_t reg, uint8_t value) {
-    i2c_util_writeReg(i2cdevice, address, reg, value);
-}
-void VL53L0X::writeReg16Bit(uint8_t reg, uint16_t value) {
-    i2c_util_writeReg16Bit(i2cdevice, address, reg, value);
-}
-void VL53L0X::writeReg32Bit(uint8_t reg, uint32_t value) {
-    i2c_util_writeReg32Bit(i2cdevice, address, reg, value);
-}
-uint8_t VL53L0X::readReg(uint8_t reg) {
-    return i2c_util_readReg(i2cdevice, address, reg);
-}
-uint16_t VL53L0X::readReg16Bit(uint8_t reg) {
-    return i2c_util_readReg16Bit(i2cdevice, address, reg);
-}
-
 
 // Constructors ////////////////////////////////////////////////////////////////
 
@@ -975,6 +959,35 @@ bool VL53L0X::performSingleRefCalibration(uint8_t vhv_init_byte)
   writeReg(SYSRANGE_START, 0x00);
 
   return true;
+}
+
+
+void VL53L0X::writeReg(uint8_t reg, uint8_t value) {
+    i2c_util_writeReg(i2cdevice, address, reg, value);
+}
+void VL53L0X::writeReg16Bit(uint8_t reg, uint16_t value) {
+    i2c_util_writeReg16Bit(i2cdevice, address, reg, value);
+}
+void VL53L0X::writeReg32Bit(uint8_t reg, uint32_t value) {
+    i2c_util_writeReg32Bit(i2cdevice, address, reg, value);
+}
+
+uint8_t VL53L0X::readReg(uint8_t reg) {
+    return i2c_util_readReg(i2cdevice, address, reg);
+}
+uint16_t VL53L0X::readReg16Bit(uint8_t reg) {
+    return i2c_util_readReg16Bit(i2cdevice, address, reg);
+}
+int VL53L0X::writeMulti(uint8_t reg, uint8_t *val, unsigned int len){
+    return i2c_util_writeMulti(i2cdevice, address, reg, val , len);
+}
+int VL53L0X::readMulti( uint8_t reg, uint8_t *val, unsigned int len) {
+    int ret = i2c_util_readMulti(i2cdevice, address, reg, val, len);
+    if (ret<0) {
+        return -1;
+    }
+
+    return len;
 }
 
 #ifdef __cplusplus

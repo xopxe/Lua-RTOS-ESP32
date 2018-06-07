@@ -74,8 +74,5 @@ int luaL_driver_error(lua_State* L, driver_error_t *error);
 
 #endif
 
-<<<<<<< HEAD
-int luaL_deprecated(lua_State* L, const char *old, const char *new_thing);
-=======
 int luaL_deprecated(lua_State* L, const char *old_func, const char *new_func);
->>>>>>> e398214b862387ae05b57edfd0da9393e51fd148
+

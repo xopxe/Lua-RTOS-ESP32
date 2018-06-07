@@ -115,9 +115,6 @@ class VL53L0X
     uint32_t readReg32Bit(uint8_t reg);
     */
 
-    int writeMulti(uint8_t reg, uint8_t const * src, uint8_t count);
-    int readMulti(uint8_t reg, uint8_t * dst, uint8_t count);
-
     bool setSignalRateLimit(float limit_Mcps);
     float getSignalRateLimit(void);
 
@@ -178,8 +175,11 @@ class VL53L0X
     void writeReg(uint8_t reg, uint8_t value);
     void writeReg16Bit(uint8_t reg, uint16_t value);
     void writeReg32Bit(uint8_t reg, uint32_t value);
+    int writeMulti(uint8_t reg, uint8_t *val, unsigned int len);
+
     uint8_t readReg(uint8_t reg);
     uint16_t readReg16Bit(uint8_t reg);
+    int readMulti(uint8_t reg, uint8_t *val, unsigned int len);
 
 };
 
