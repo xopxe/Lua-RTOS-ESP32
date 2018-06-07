@@ -1270,6 +1270,10 @@ menu "Lua RTOS"
                bool "Include VL53L0X based ring"
                default y
 
+            config LUA_RTOS_LUA_USE_APDS9960
+               bool "Include APDS9960 sensor module."
+               default y
+
             config LUA_RTOS_LUA_USE_OMNI
                bool "Include robotito onidirectional control"
                default y
@@ -1283,6 +1287,21 @@ menu "Lua RTOS"
 
             config VL53L0X_SPEED
                int "VL53L0X I2C port speed"
+               range 100000 3400000
+               default 400000
+               help
+                 I2C port speed in hertz
+
+
+            config APDS9960_I2C_CHANNEL
+               int "i2c channel to use for APDS9960"
+               range 0 1
+               default 0
+               help
+                  I2C port where APDS9960 is attached
+
+            config APDS9960_SPEED
+               int "APDS9960 I2C port speed"
                range 100000 3400000
                default 400000
                help

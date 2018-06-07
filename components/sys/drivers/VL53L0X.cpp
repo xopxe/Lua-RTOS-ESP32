@@ -11,9 +11,9 @@
 extern "C"{
 #endif
 
-#include <byteswap.h>
 #include <drivers/VL53L0X.h>
 //#include <Wire.h>
+#include "i2c_util.h"
 
 // Defines /////////////////////////////////////////////////////////////////////
 
@@ -49,13 +49,21 @@ extern "C"{
 // PLL_period_ps = 1655; macro_period_vclks = 2304
 #define calcMacroPeriod(vcsel_period_pclks) ((((uint32_t)2304 * (vcsel_period_pclks) * 1655) + 500) / 1000)
 
-static void print_driver_error(driver_error_t *error, int err) {
-  if (error->msg) {
-  	printf(" DRIVER ERROR [%d]: type: %d, unit: %d, exc: %d msg:%s\r\n", err, error->type, error->unit, error->exception, error->msg);
-  } else{
-  	printf(" DRIVER ERROR [%d]: type: %d, unit: %d, exc: %d msg:NULL\r\n", err, error->type, error->unit, error->exception);
-  }
-  free(error);
+
+void VL53L0X::writeReg(uint8_t reg, uint8_t value) {
+    i2c_util_writeReg(i2cdevice, address, reg, value);
+}
+void VL53L0X::writeReg16Bit(uint8_t reg, uint16_t value) {
+    i2c_util_writeReg16Bit(i2cdevice, address, reg, value);
+}
+void VL53L0X::writeReg32Bit(uint8_t reg, uint32_t value) {
+    i2c_util_writeReg32Bit(i2cdevice, address, reg, value);
+}
+uint8_t VL53L0X::readReg(uint8_t reg) {
+    return i2c_util_readReg(i2cdevice, address, reg);
+}
+uint16_t VL53L0X::readReg16Bit(uint8_t reg) {
+    return i2c_util_readReg16Bit(i2cdevice, address, reg);
 }
 
 
@@ -95,7 +103,7 @@ bool VL53L0X::init(bool io_2v8)
  
 	uint8_t i2c = CONFIG_VL53L0X_I2C_CHANNEL;
 	if ((error=i2c_attach(i2c, I2C_MASTER, CONFIG_VL53L0X_SPEED, 0, 0, &i2cdevice))) {
-    	print_driver_error(error, -10);
+    	i2c_util_print_driver_error(error, -10);
     	return false;
   }
 
@@ -320,207 +328,6 @@ bool VL53L0X::init(bool io_2v8)
 }
 
 
-// Write an arbitrary number of bytes from the given array to the sensor,
-// starting at the given register
-int VL53L0X::writeMulti(uint8_t reg, uint8_t const * src, uint8_t count)
-{
-  /*
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-
-  while (count-- > 0)
-  {
-    Wire.write(*(src++));
-  }
-
-  last_status = Wire.endTransmission();
-  */
-//printf("In: int VL53L0X::writeMulti reg: %d, src[0]: %d, count: %d\r\n", reg, src[0], count);
-
-
-  driver_error_t *error;
-	int transaction = I2C_TRANSACTION_INITIALIZER;
-	if ((error = i2c_start(i2cdevice, &transaction))) {
-    	print_driver_error(error, -1);
-    	return -1;
-  }
-
-	if ((error = i2c_write_address(i2cdevice, &transaction, address, 0))) {
-    	print_driver_error(error, -2);
-    	return -2;
-  }
-
-	if ((error = i2c_write(i2cdevice, &transaction, (char*)&reg, 1))) {
-    	print_driver_error(error, -3);
-    	return -3;
-  }
-
-	if ((error = i2c_write(i2cdevice, &transaction, (char*)src, count))) {
-    	print_driver_error(error, -4);
-    	return -4;
-  }
-
-	if ((error = i2c_stop(i2cdevice, &transaction))) {
-    	print_driver_error(error, -5);
-    	return -5;
-  }
-//printf("Out: int VL53L0X::writeMulti reg: %d, src[0]: %d, count: %d\r\n", reg, src[0], count);
-  return 0;
-}
-
-// Write an 8-bit register
-void VL53L0X::writeReg(uint8_t reg, char value)
-{
-  //Wire.beginTransmission(address);
-  //Wire.write(reg);
-  //Wire.write(value);
-  //last_status = Wire.endTransmission();
-//uint8_t buff[1];
-
-  writeMulti(reg, (uint8_t*)&value, 1);
-}
-
-// Write a 16-bit register
-void VL53L0X::writeReg16Bit(uint8_t reg, uint16_t value)
-{
-  //Wire.beginTransmission(address);
-  //Wire.write(reg);
-  //Wire.write((value >> 8) & 0xFF); // value high byte
-  //Wire.write( value       & 0xFF); // value low byte
-  //last_status = Wire.endTransmission();
-
-  uint16_t buff = __bswap_16 (value);
-  writeMulti(reg, (uint8_t*)&buff, 2);
-}
-
-// Write a 32-bit register
-void VL53L0X::writeReg32Bit(uint8_t reg, uint32_t value)
-{
-  //Wire.beginTransmission(address);
-  //Wire.write(reg);
-  //Wire.write((value >> 24) & 0xFF); // value highest byte
-  //Wire.write((value >> 16) & 0xFF);
-  //Wire.write((value >>  8) & 0xFF);
-  //Wire.write( value        & 0xFF); // value lowest byte
-  //last_status = Wire.endTransmission();
-
-  uint32_t buff = __bswap_32 (value);
-  writeMulti(reg, (uint8_t*)&buff, 4);
-}
-
-// Read an arbitrary number of bytes from the sensor, starting at the given
-// register, into the given array
-int VL53L0X::readMulti(uint8_t reg, uint8_t * dst, uint8_t count)
-{
-  /*
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  last_status = Wire.endTransmission();
-
-  Wire.requestFrom(address, count);
-
-  while (count-- > 0)
-  {
-    *(dst++) = Wire.read();
-  }
-  */
-
-  driver_error_t *error;
-	int transaction = I2C_TRANSACTION_INITIALIZER;
-
-	if ((error=i2c_start(i2cdevice, &transaction))) {
-    	print_driver_error(error, -1);
-    	return -1;
-  }
-	if ((error = i2c_write_address(i2cdevice, &transaction, address, 0))) {
-    	print_driver_error(error, -2);
-    	return -2;
-  }	
-  if ((error = i2c_write(i2cdevice, &transaction, (char *)&reg, 1))) {
-    	print_driver_error(error, -3);
-    	return -3;
-  }	
-/*  if ((error = i2c_stop(i2cdevice, &transaction))) {
-    	print_driver_error(error, -4);
-    	return -4;
-  }*/
-
-	if ((error = i2c_start(i2cdevice, &transaction))) {
-    	print_driver_error(error, -5);
-    	return -5;
-  }
-	if ((error = i2c_write_address(i2cdevice, &transaction, address, 1))) {
-    	print_driver_error(error, -6);
-    	return -6;
-  }	if ((error = i2c_read(i2cdevice, &transaction, (char *)dst, count))) {
-    	print_driver_error(error, -7);
-    	return -7;
-  }	if ((error = i2c_stop(i2cdevice, &transaction))) {
-    	print_driver_error(error, -8);
-    	return -8;
-  }
-
-  return 0;
-}
-
-// Read an 8-bit register
-uint8_t VL53L0X::readReg(uint8_t reg)
-{
-  /*uint8_t value;
-
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  last_status = Wire.endTransmission();
-
-  Wire.requestFrom(address, (uint8_t)1);
-  value = Wire.read();
-
-  return value;*/
-
-  uint8_t value[1];
-  readMulti(reg, value, 1);
-  return value[0];
-}
-
-// Read a 16-bit register
-uint16_t VL53L0X::readReg16Bit(uint8_t reg)
-{
-  /*uint16_t value;
-
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  last_status = Wire.endTransmission();
-
-  Wire.requestFrom(address, (uint8_t)2);
-  value  = (uint16_t)Wire.read() << 8; // value high byte
-  value |=           Wire.read();      // value low byte
-  */
-
-  uint16_t value;
-  readMulti(reg, (uint8_t *)&value, 2);
-  return __bswap_16 (value);
-}
-
-// Read a 32-bit register
-uint32_t VL53L0X::readReg32Bit(uint8_t reg)
-{
-  /*uint32_t value;
-
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  last_status = Wire.endTransmission();
-
-  Wire.requestFrom(address, (uint8_t)4);
-  value  = (uint32_t)Wire.read() << 24; // value highest byte
-  value |= (uint32_t)Wire.read() << 16;
-  value |= (uint16_t)Wire.read() <<  8;
-  value |=           Wire.read();       // value lowest byte
-  */
-
-  uint32_t value;
-  readMulti(reg, (uint8_t *)&value, 4);
-  return __bswap_32 (value);
-}
 
 
 

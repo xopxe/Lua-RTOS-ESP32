@@ -3,11 +3,11 @@
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
- * and Eclipse Distribution License v1.0 which accompany this distribution.
+ * and Eclipse Distribution License v1.0 which accompany this distribution. 
  *
- * The Eclipse Public License is available at
+ * The Eclipse Public License is available at 
  *    http://www.eclipse.org/legal/epl-v10.html
- * and the Eclipse Distribution License is available at
+ * and the Eclipse Distribution License is available at 
  *   http://www.eclipse.org/org/documents/edl-v10.php.
  *
  * Contributors:
@@ -21,7 +21,7 @@
  *
  * See page 104 of the Unicode Standard 5.0 for the list of well formed
  * UTF-8 byte sequences.
- *
+ * 
  */
 #include "utf-8.h"
 
@@ -138,7 +138,7 @@ int UTF8_validate(int len, const char* data)
 	}
 	curdata = UTF8_char_validate(len, data);
 	while (curdata && (curdata < data + len))
-		curdata = UTF8_char_validate(len, curdata);
+		curdata = UTF8_char_validate(data + len - curdata, curdata);
 
 	rc = curdata != NULL;
 exit:

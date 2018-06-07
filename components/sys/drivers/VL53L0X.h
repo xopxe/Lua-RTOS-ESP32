@@ -106,12 +106,14 @@ class VL53L0X
 
     bool init(bool io_2v8 = true);
 
+    /*
     void writeReg(uint8_t reg, char value);
     void writeReg16Bit(uint8_t reg, uint16_t value);
     void writeReg32Bit(uint8_t reg, uint32_t value);
     uint8_t readReg(uint8_t reg);
     uint16_t readReg16Bit(uint8_t reg);
     uint32_t readReg32Bit(uint8_t reg);
+    */
 
     int writeMulti(uint8_t reg, uint8_t const * src, uint8_t count);
     int readMulti(uint8_t reg, uint8_t * dst, uint8_t count);
@@ -172,6 +174,13 @@ class VL53L0X
     static uint16_t encodeTimeout(uint16_t timeout_mclks);
     static uint32_t timeoutMclksToMicroseconds(uint16_t timeout_period_mclks, uint8_t vcsel_period_pclks);
     static uint32_t timeoutMicrosecondsToMclks(uint32_t timeout_period_us, uint8_t vcsel_period_pclks);
+
+    void writeReg(uint8_t reg, uint8_t value);
+    void writeReg16Bit(uint8_t reg, uint16_t value);
+    void writeReg32Bit(uint8_t reg, uint32_t value);
+    uint8_t readReg(uint8_t reg);
+    uint16_t readReg16Bit(uint8_t reg);
+
 };
 
 #endif

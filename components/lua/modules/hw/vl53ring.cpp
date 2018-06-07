@@ -8,6 +8,7 @@ extern "C"{
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/adds.h"
+#include "freertos/timers.h"
 
 #include "modules.h"
 //#include "error.h"
@@ -28,6 +29,9 @@ extern "C"{
 #define REMAPADDRESS {42, 43}  // {0x2A, 0x2B}
 
 
+TimerHandle_t vl53ring_get_timer;
+int tmr_callback=LUA_REFNIL;
+
 typedef struct {
     int xshut_pin;
     VL53L0X vl53l0x;
@@ -36,8 +40,33 @@ typedef struct {
 
 static sensor_t sensors[NSENSORS];
 
-//static int process_i2c_error(lua_State *L, VL53L0X &vl53l0x) {
-//}
+static void callback_sw_func(TimerHandle_t xTimer) {
+	lua_State *TL;
+	lua_State *L;
+	int tref;
+
+	L = pvGetLuaState();
+    TL = lua_newthread(L);
+
+    tref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    lua_rawgeti(L, LUA_REGISTRYINDEX, tmr_callback);
+    lua_xmove(L, TL, 1);
+
+    //push reading
+    for (int i=0; i<NSENSORS; i++) {
+        uint16_t dist = sensors[i].vl53l0x.readRangeContinuousMillimeters();
+        lua_pushinteger(TL, dist);
+    }
+
+    int status = lua_pcall(TL, NSENSORS, 0, 0);
+    luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+    if (status != LUA_OK) {
+    	const char *msg = lua_tostring(TL, -1);
+    	luaL_error(TL, msg);
+    }
+}
 
 static int lvl53ring_init (lua_State *L) {
 	driver_error_t *error;
@@ -156,32 +185,54 @@ static int lvl53ring_set_measurement_timing_budget (lua_State *L) {
 	return 1;
 }
 
-static int lvl53ring_set_continuous_mode (lua_State *L) {
-    bool enable =  lua_toboolean( L, 1 );
-
+static int lvl53ring_get_continuous (lua_State *L) {
+    bool enable = lua_toboolean(L, 1);
     if (enable) {
-        uint16_t ms = luaL_checkinteger( L, 2 );
-        for (int i=0; i<NSENSORS; i++) {
-            sensors[i].vl53l0x.startContinuous(ms);
+        if (tmr_callback!=LUA_REFNIL) {
+            lua_pushnil(L);
+            lua_pushstring(L, "continuos get already running");
+            return 2;
         }
+
+        uint32_t millis = luaL_checkinteger( L, 1 );
+	    if (millis < 1) {
+            lua_pushnil(L);
+            lua_pushstring(L, "invalid period");
+            return 2;
+	    }
+
+        //set sensor mode
+        for (int i=0; i<NSENSORS; i++) {
+            sensors[i].vl53l0x.startContinuous(millis);
+        }
+
+        //set timer for callback
+	    luaL_checktype(L, 2, LUA_TFUNCTION);
+        lua_pushvalue(L, 2);
+        tmr_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+        vl53ring_get_timer = xTimerCreate("vl53ring", millis / portTICK_PERIOD_MS, pdTRUE, (void *)vl53ring_get_timer, callback_sw_func);
+        xTimerStart(vl53ring_get_timer, 0);
     } else {
+        if (tmr_callback==LUA_REFNIL) {
+            lua_pushnil(L);
+            lua_pushstring(L, "no continuos get running");
+            return 2;
+        }
+
+        //reset sensor mode
         for (int i=0; i<NSENSORS; i++) {
             sensors[i].vl53l0x.stopContinuous();
         }
+
+        //delete timer
+        xTimerStop(vl53ring_get_timer, portMAX_DELAY);
+		xTimerDelete(vl53ring_get_timer, portMAX_DELAY);
+        tmr_callback=LUA_REFNIL;
     }
 
     lua_pushboolean(L, true);
 	return 1;
 }
-
-static int lvl53ring_get_continuous_distance (lua_State *L) {
-    for (int i=0; i<NSENSORS; i++) {
-        uint16_t dist = sensors[i].vl53l0x.readRangeContinuousMillimeters();
-        lua_pushinteger(L, dist);
-    }
-	return NSENSORS;
-}
-
 
 static const luaL_Reg vl53ring[] = {
 //	{"attach", lvl53l0x_attach},
@@ -191,8 +242,7 @@ static const luaL_Reg vl53ring[] = {
 	{"test", lvl53ring_test},
 	{"set_timeout", lvl53ring_set_timeout},
 	{"set_measurement_timing_budget", lvl53ring_set_measurement_timing_budget},
-	{"set_continuous_mode", lvl53ring_set_continuous_mode},
-	{"get_continuous_reading", lvl53ring_get_continuous_distance},
+	{"get_continuous", lvl53ring_get_continuous},
     {NULL, NULL}
 };
 

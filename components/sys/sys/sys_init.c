@@ -78,6 +78,7 @@ extern void _pthread_init();
 extern void _cpu_init();
 extern void _clock_init();
 extern void _signal_init();
+extern void _status_init();
 
 extern const char *__progname;
 
@@ -189,14 +190,15 @@ void _sys_init() {
     periph_module_disable(PERIPH_I2C1_MODULE);
 
 	// Init important things for Lua RTOS
+    _status_init();
 	_clock_init();
 	_cpu_init();
     _driver_init();
     _signal_init();
 
-    status_set(STATUS_SYSCALLS_INITED);
-    status_set(STATUS_LUA_SHELL);
-    status_set(STATUS_LUA_HISTORY);
+    status_set(STATUS_SYSCALLS_INITED, 0x00000000);
+    status_set(STATUS_LUA_SHELL, 0x00000000);
+    status_set(STATUS_LUA_HISTORY, 0x00000000);
 
     esp_vfs_lwip_sockets_register();
 	esp_vfs_unregister("/dev/uart");

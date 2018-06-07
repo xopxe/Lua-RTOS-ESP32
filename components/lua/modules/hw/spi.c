@@ -61,301 +61,337 @@
 #include <drivers/spi.h>
 
 static int lspi_pins(lua_State* L) {
-	uint8_t table = 0;
-	uint16_t count = 0, i = 0;
-	int unit = CPU_FIRST_SPI;
+    uint8_t table = 0;
+    uint16_t count = 0, i = 0;
+    int unit = CPU_FIRST_SPI;
 
-	spi_bus_t *spi_bus = get_spi_info();
+    spi_bus_t *spi_bus = get_spi_info();
 
-	// Check if user wants result as a table, or wants result
-	// on the console
-	if (lua_gettop(L) == 1) {
-		luaL_checktype(L, 1, LUA_TBOOLEAN);
-		if (lua_toboolean(L, 1)) {
-			table = 1;
-		}
-	}
+    // Check if user wants result as a table, or wants result
+    // on the console
+    if (lua_gettop(L) == 1) {
+        luaL_checktype(L, 1, LUA_TBOOLEAN);
+        if (lua_toboolean(L, 1)) {
+            table = 1;
+        }
+    }
 
-	if (table){
-		lua_createtable(L, count, 0);
-	}
+    if (table){
+        lua_createtable(L, count, 0);
+    }
 
-	for(unit = CPU_FIRST_SPI; unit <= CPU_LAST_SPI;unit++) {
-		if (!table) {
-			printf("SPI%d: ", unit);
+    for(unit = CPU_FIRST_SPI; unit <= CPU_LAST_SPI;unit++) {
+        if (!table) {
+            printf("SPI%d: ", unit);
 
-			printf("miso=");
-			if (spi_bus[spi_idx(unit)].miso >= 0) {
-				printf("%s%d ", gpio_portname(spi_bus[spi_idx(unit)].miso), gpio_name(spi_bus[spi_idx(unit)].miso));
-			} else {
-				printf("unused");
-			}
+            printf("miso=");
+            if (spi_bus[spi_idx(unit)].miso >= 0) {
+                printf("%s%d ", gpio_portname(spi_bus[spi_idx(unit)].miso), gpio_name(spi_bus[spi_idx(unit)].miso));
+            } else {
+                printf("unused");
+            }
 
-			printf("mosi=");
-			if (spi_bus[spi_idx(unit)].mosi >= 0) {
-				printf("%s%d ", gpio_portname(spi_bus[spi_idx(unit)].mosi), gpio_name(spi_bus[spi_idx(unit)].mosi));
-			} else {
-				printf("unused");
-			}
+            printf("mosi=");
+            if (spi_bus[spi_idx(unit)].mosi >= 0) {
+                printf("%s%d ", gpio_portname(spi_bus[spi_idx(unit)].mosi), gpio_name(spi_bus[spi_idx(unit)].mosi));
+            } else {
+                printf("unused");
+            }
 
-			printf("clk=");
-			if (spi_bus[spi_idx(unit)].clk >= 0) {
-				printf("%s%d ", gpio_portname(spi_bus[spi_idx(unit)].clk), gpio_name(spi_bus[spi_idx(unit)].clk));
-			} else {
-				printf("unused");
-			}
+            printf("clk=");
+            if (spi_bus[spi_idx(unit)].clk >= 0) {
+                printf("%s%d ", gpio_portname(spi_bus[spi_idx(unit)].clk), gpio_name(spi_bus[spi_idx(unit)].clk));
+            } else {
+                printf("unused");
+            }
 
-			printf("\r\n");
-		} else {
-			lua_pushinteger(L, i);
+            printf("\r\n");
+        } else {
+            lua_pushinteger(L, i);
 
-			lua_createtable(L, 0, 4);
+            lua_createtable(L, 0, 4);
 
-			lua_pushinteger(L, unit);
-	        lua_setfield (L, -2, "id");
+            lua_pushinteger(L, unit);
+            lua_setfield (L, -2, "id");
 
-	        lua_pushinteger(L, spi_bus[spi_idx(unit)].miso);
-			lua_setfield (L, -2, "miso");
+            lua_pushinteger(L, spi_bus[spi_idx(unit)].miso);
+            lua_setfield (L, -2, "miso");
 
-			lua_pushinteger(L, spi_bus[spi_idx(unit)].mosi);
-	        lua_setfield (L, -2, "mosi");
+            lua_pushinteger(L, spi_bus[spi_idx(unit)].mosi);
+            lua_setfield (L, -2, "mosi");
 
-	        lua_pushinteger(L, spi_bus[spi_idx(unit)].clk);
-			lua_setfield (L, -2, "clk");
+            lua_pushinteger(L, spi_bus[spi_idx(unit)].clk);
+            lua_setfield (L, -2, "clk");
 
-			 lua_settable(L,-3);
-		}
+            lua_settable(L,-3);
+        }
 
-		i++;
-	}
+        i++;
+    }
 
-	return table;
+    return table;
 }
 
 static int lspi_setpins(lua_State* L) {
-	driver_error_t *error;
+    driver_error_t *error;
 
-	int id = luaL_checkinteger(L, 1);
-	int miso = luaL_checkinteger(L, 2);
-	int mosi = luaL_checkinteger(L, 3);
-	int clk = luaL_checkinteger(L, 4);
+    int id = luaL_checkinteger(L, 1);
+    int miso = luaL_checkinteger(L, 2);
+    int mosi = luaL_checkinteger(L, 3);
+    int clk = luaL_checkinteger(L, 4);
 
-	if ((error = spi_pin_map(id, miso, mosi, clk))) {
-	    return luaL_driver_error(L, error);
-	}
+    if ((error = spi_pin_map(id, miso, mosi, clk))) {
+        return luaL_driver_error(L, error);
+    }
 
-	return 0;
+    return 0;
 }
 
 static int lspi_attach(lua_State* L) {
-	int id, data_bits, is_master, cs;
-	driver_error_t *error;
-	uint32_t clock;
-	int spi_mode = 0;
-	int flags = DRIVER_ALL_FLAGS;
+    int id, data_bits, is_master, cs;
+    driver_error_t *error;
+    uint32_t clock;
+    int spi_mode = 0;
+    int flags = DRIVER_ALL_FLAGS;
 
-	id = luaL_checkinteger(L, 1);
-	is_master = luaL_checkinteger(L, 2) == 1;
-	cs = luaL_checkinteger(L, 3);
-	clock = luaL_checkinteger(L, 4);
-	data_bits = luaL_checkinteger(L, 5);
-	spi_mode = luaL_checkinteger(L, 6);
-	flags = luaL_optinteger(L, 7, SPI_FLAG_WRITE | SPI_FLAG_READ);
+    id = luaL_checkinteger(L, 1);
+    is_master = luaL_checkinteger(L, 2) == 1;
+    cs = luaL_checkinteger(L, 3);
+    clock = luaL_checkinteger(L, 4);
+    data_bits = luaL_checkinteger(L, 5);
+    spi_mode = luaL_checkinteger(L, 6);
+    flags = luaL_optinteger(L, 7, SPI_FLAG_WRITE | SPI_FLAG_READ);
 
-	spi_userdata *spi = (spi_userdata *)lua_newuserdata(L, sizeof(spi_userdata));
+    // Allocate user data
+    spi_userdata *spi = (spi_userdata *)lua_newuserdata(L, sizeof(spi_userdata));
 
-	if ((error = spi_setup(id, is_master, cs, spi_mode, clock, flags, &spi->spi_device))) {
-	    return luaL_driver_error(L, error);
-	}
+    spi->buff = NULL;
+    spi->len = 0;
 
-	luaL_getmetatable(L, "spi.ins");
+    // Setup device
+    if ((error = spi_setup(id, is_master, cs, spi_mode, clock, flags, &spi->spi_device))) {
+        return luaL_driver_error(L, error);
+    }
+
+    luaL_getmetatable(L, "spi.ins");
     lua_setmetatable(L, -2);
 
-	(void)data_bits;
-	return 1;
+    (void)data_bits;
+    return 1;
 }
 
 static int lspi_select(lua_State* L) {
-	driver_error_t *error;
-    spi_userdata *spi = NULL;
+    driver_error_t *error;
 
-    spi = (spi_userdata *)luaL_checkudata(L, 1, "spi.ins");
+    // Get user data
+    spi_userdata *spi = (spi_userdata *)luaL_checkudata(L, 1, "spi.ins");
     luaL_argcheck(L, spi, 1, "spi expected");
 
+    // Allocate space for buffer
+    spi->buff = malloc(SPI_MAX_SIZE);
+    if (!spi->buff) {
+        return luaL_exception(L, SPI_ERR_NOT_ENOUGH_MEMORY);
+    }
+
+    // Select device
     if ((error = spi_select(spi->spi_device))) {
-    	return luaL_driver_error(L, error);
+        return luaL_driver_error(L, error);
     }
 
     return 0;
 }
 
 static int lspi_deselect(lua_State*L ) {
-	driver_error_t *error;
-    spi_userdata *spi = NULL;
+    driver_error_t *error = NULL;
 
-    spi = (spi_userdata *)luaL_checkudata(L, 1, "spi.ins");
+    // Get user data
+    spi_userdata *spi = (spi_userdata *)luaL_checkudata(L, 1, "spi.ins");
     luaL_argcheck(L, spi, 1, "spi expected");
 
+    // Flush buffer, if there are pending data
+    if (spi->len > 0) {
+        if ((error = spi_bulk_write(spi->spi_device, spi->len, spi->buff))) {
+            goto exit;
+        }
+    }
+
+    // Deselect device
     if ((error = spi_deselect(spi->spi_device))) {
-    	return luaL_driver_error(L, error);
+            goto exit;
+    }
+
+exit:
+    // Destroy buffer
+    spi->len = 0;
+    if (spi->buff) free(spi->buff);
+
+    if (error) {
+        return luaL_driver_error(L, error);
     }
 
     return 0;
 }
 
 static int lspi_rw_helper( lua_State *L, int withread ) {
-	driver_error_t *error;
-	unsigned char value;
-	const char *sval;
-	spi_userdata *spi = NULL;
+    driver_error_t *error;
 
-	int total = lua_gettop(L), i, j;
+    // Get number of arguments
+    int total = lua_gettop(L);
 
-	spi = (spi_userdata *)luaL_checkudata(L, 1, "spi.ins");
-	luaL_argcheck(L, spi, 1, "spi expected");
+    // Get user data
+    spi_userdata *spi = (spi_userdata *)luaL_checkudata(L, 1, "spi.ins");
+    luaL_argcheck(L, spi, 1, "spi expected");
 
-	size_t len, residx = 0;
+    // If we want to read and have pending data to send, flush buffer first
+    if (withread && (spi->len > 0)) {
+        // Flush buffer
+        if ((error = spi_bulk_write(spi->spi_device, spi->len, spi->buff))) {
+            goto exit;
+        }
 
-	if (withread)
-		lua_newtable(L);
+        spi->len = 0;
+    }
 
-	// Try to create a buffer
-	int buflen = 0;
+    // Get buffer
+    uint8_t *buff = spi->buff + spi->len;
+
+    // Populate buffer
+    int i;            // Argument number
+    const char *sval; // String value
+    size_t slen;      // Size of the string value
+    size_t data_len;  // Total length of data
+
+    data_len = 0;
     for (i = 2; i <= total; i++) {
         if(lua_isinteger(L, i)) {
-            buflen += 1;
-        } else if(lua_isstring( L, i )) {
-            buflen += lua_rawlen(L, i);
-        }
-    }
-
-    uint8_t *buff = NULL;
-    if (buflen > 0) {
-        buff = calloc(buflen, 1);
-        if (!buff) {
-            buflen = 0;
-        }
-    }
-
-    if (buflen > 0) {
-        // Populate the buffer
-        uint8_t *cbuff = buff;
-        for (i = 2; i <= total; i++) {
-            if(lua_isinteger(L, i)) {
-                *cbuff++ = (uint8_t)(lua_tointeger(L, i) & 0xff);
-            } else if(lua_isstring( L, i )) {
-                sval = lua_tolstring(L, i, &len);
-                memcpy(cbuff, sval, len);
-                cbuff += len;
-            }
-        }
-
-        if (withread) {
-            error = spi_bulk_rw(spi->spi_device, buflen, buff);
-        } else {
-            error = spi_bulk_write(spi->spi_device, buflen, buff);
-        }
-
-        if (error) {
-            return luaL_driver_error(L, error);
-        }
-
-        cbuff = buff;
-        for (i = 2; i <= total; i++) {
-            if(lua_isinteger(L, i)) {
-                if(withread) {
-                    lua_pushinteger(L, *cbuff);
-                    lua_rawseti(L, -2, residx++);
-                    cbuff += 1;
-                }
-            } else if(lua_isstring( L, i )) {
+            // Flush buffer, if required
+            if (spi->len + 1 > SPI_MAX_SIZE) {
                 if (withread) {
-                    len = lua_rawlen(L, i);
-                    for(j = 0; j < len; j ++) {
-                        lua_pushinteger(L, *cbuff);
-                        lua_rawseti(L, -2, residx++);
-                        cbuff += 1;
+                    if ((error = spi_bulk_rw(spi->spi_device, spi->len, spi->buff))) {
+                        goto exit;
                     }
-                }
-            }
-        }
-
-        free(buff);
-    } else {
-        for (i = 2; i <= total; i++) {
-            if(lua_isinteger(L, i)) {
-                error = spi_transfer(spi->spi_device, lua_tointeger(L, i), &value);
-                if (error) {
-                    return luaL_driver_error(L, error);
+                } else {
+                    if ((error = spi_bulk_write(spi->spi_device, spi->len, spi->buff))) {
+                        goto exit;
+                    }
                 }
 
-                if(withread) {
-                    lua_pushinteger(L, value);
-                    lua_rawseti(L, -2, residx++);
-                }
+                spi->len = 0;
+                buff = spi->buff;
             }
-            else if(lua_isstring( L, i )) {
-                sval = lua_tolstring(L, i, &len);
-                for(j = 0; j < len; j ++) {
-                    error = spi_transfer(spi->spi_device, sval[j], &value);
-                    if (error) {
-                        return luaL_driver_error(L, error);
+
+            // Add to buffer
+            *buff++ = (uint8_t)(lua_tointeger(L, i) & 0xff);
+            spi->len++;
+            data_len++;
+        } else if(lua_isstring( L, i )) {
+            sval = lua_tolstring(L, i, &slen);
+
+            // Flush buffer, if required
+            if (spi->len + slen > SPI_MAX_SIZE) {
+                if (withread) {
+                    if ((error = spi_bulk_rw(spi->spi_device, spi->len, spi->buff))) {
+                        goto exit;
                     }
-                    if (withread) {
-                        lua_pushinteger(L, value);
-                        lua_rawseti(L, -2, residx++);
+                } else {
+                    if ((error = spi_bulk_write(spi->spi_device, spi->len, spi->buff))) {
+                        goto exit;
                     }
                 }
+
+                spi->len = 0;
+                buff = spi->buff;
             }
+
+            // Add to buffer
+            memcpy(buff, sval, slen);
+            buff += slen;
+            spi->len += slen;
+            data_len += slen;
         }
     }
 
-	return withread ? 1 : 0;
+    if (withread) {
+        // Flush buffer
+        if ((error = spi_bulk_rw(spi->spi_device, spi->len, spi->buff))) {
+            goto exit;
+        }
+
+        // Create a table to return data
+        lua_createtable(L,data_len,0);
+
+        // Fill table
+        buff = spi->buff;
+        for (i = 1; i <= data_len; i++) {
+            lua_pushinteger(L, *buff);
+            lua_rawseti(L, -2, i);
+            buff++;
+        }
+    }
+
+exit:
+    if (error) {
+        return luaL_driver_error(L, error);
+    }
+
+    return withread ? 1 : 0;
 }
 
 static int lspi_write(lua_State* L) {
-	return lspi_rw_helper(L, 0);
+    return lspi_rw_helper(L, 0);
 }
 
 static int lspi_readwrite(lua_State* L) {
-	return lspi_rw_helper(L, 1);
+    return lspi_rw_helper(L, 1);
+}
+
+static int lspi_detach(lua_State* L) {
+    spi_userdata *spi = (spi_userdata *)luaL_checkudata(L, 1, "spi.ins");
+    if (spi) {
+        driver_error_t *error;
+
+        if ((error = spi_unsetup(spi->spi_device))) {
+            return luaL_driver_error(L, error);
+        }
+
+        if (spi->buff) free(spi->buff);
+    }
+
+    return 0;
 }
 
 // Destructor
 static int lspi_ins_gc (lua_State *L) {
-    spi_userdata *udata = NULL;
-    udata = (spi_userdata *)luaL_checkudata(L, 1, "spi.ins");
-	if (udata) {
-	//	free(udata->instance);
-	}
+    lspi_detach(L);
 
-	return 0;
+    return 0;
 }
 
 static const LUA_REG_TYPE lspi_map[] = {
-	{ LSTRKEY( "attach"     ),	 LFUNCVAL( lspi_attach   ) },
-	{ LSTRKEY( "pins"       ),	 LFUNCVAL( lspi_pins     ) },
-	{ LSTRKEY( "setpins"    ),	 LFUNCVAL( lspi_setpins  ) },
-	DRIVER_REGISTER_LUA_ERRORS(spi)
-	{ LSTRKEY( "WRITE"      ),	 LINTVAL ( SPI_FLAG_WRITE) },
-	{ LSTRKEY( "READ"       ),	 LINTVAL ( SPI_FLAG_READ ) },
-	{ LSTRKEY( "MASTER"     ),	 LINTVAL ( 1 ) },
-	{ LSTRKEY( "SLAVE"      ),	 LINTVAL ( 0 ) },
-	SPI_SPI0
-	SPI_SPI1
-	SPI_SPI2
-	SPI_SPI3
+    { LSTRKEY( "attach"     ),     LFUNCVAL( lspi_attach   ) },
+    { LSTRKEY( "pins"       ),     LFUNCVAL( lspi_pins     ) },
+    { LSTRKEY( "setpins"    ),     LFUNCVAL( lspi_setpins  ) },
+    DRIVER_REGISTER_LUA_ERRORS(spi)
+    { LSTRKEY( "WRITE"      ),     LINTVAL ( SPI_FLAG_WRITE) },
+    { LSTRKEY( "READ"       ),     LINTVAL ( SPI_FLAG_READ ) },
+    { LSTRKEY( "MASTER"     ),     LINTVAL ( 1 ) },
+    { LSTRKEY( "SLAVE"      ),     LINTVAL ( 0 ) },
+    SPI_SPI0
+    SPI_SPI1
+    SPI_SPI2
+    SPI_SPI3
     { LNILKEY, LNILVAL }
 };
 
 static const LUA_REG_TYPE lspi_ins_map[] = {
-	{ LSTRKEY( "select"      ),	 LFUNCVAL( lspi_select    ) },
-	{ LSTRKEY( "deselect"    ),	 LFUNCVAL( lspi_deselect  ) },
-	{ LSTRKEY( "write"       ),	 LFUNCVAL( lspi_write     ) },
-	{ LSTRKEY( "readwrite"   ),	 LFUNCVAL( lspi_readwrite ) },
-    { LSTRKEY( "__metatable" ),	 LROVAL  ( lspi_ins_map   ) },
-	{ LSTRKEY( "__index"     ),  LROVAL  ( lspi_ins_map   ) },
-	{ LSTRKEY( "__gc"        ),  LFUNCVAL( lspi_ins_gc    ) },
+    { LSTRKEY( "detach"      ),  LFUNCVAL( lspi_detach    ) },
+    { LSTRKEY( "select"      ),  LFUNCVAL( lspi_select    ) },
+    { LSTRKEY( "deselect"    ),  LFUNCVAL( lspi_deselect  ) },
+    { LSTRKEY( "write"       ),  LFUNCVAL( lspi_write     ) },
+    { LSTRKEY( "readwrite"   ),  LFUNCVAL( lspi_readwrite ) },
+    { LSTRKEY( "__metatable" ),  LROVAL  ( lspi_ins_map   ) },
+    { LSTRKEY( "__index"     ),  LROVAL  ( lspi_ins_map   ) },
+    { LSTRKEY( "__gc"        ),  LFUNCVAL( lspi_ins_gc    ) },
     { LNILKEY, LNILVAL }
 };
 
@@ -367,13 +403,3 @@ LUALIB_API int luaopen_spi( lua_State *L ) {
 MODULE_REGISTER_ROM(SPI, spi, lspi_map, luaopen_spi, 1);
 
 #endif
-
-/*
-
- mcp3208 = spi.setup(spi.SPI2, spi.MASTER, pio.GPIO15, 1000, 1, 1, 8)
-
- while true do
- mcp3208:select()
- mcp3208:deselect()
- end
- */
