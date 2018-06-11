@@ -93,7 +93,7 @@ static int lvl53ring_init (lua_State *L) {
         }
         
     }
-    usleep(50*1000);
+    usleep(5*1000);
 
     //init sensors and renumber        
     for (int i=0; i<NSENSORS; i++) {
@@ -106,7 +106,7 @@ static int lvl53ring_init (lua_State *L) {
         	return 3;
         }
         
-        usleep(50*1000);
+        usleep(5*1000);
         bool ok = sensors[i].vl53l0x.init();
         //printf("done: bool ok = sensors[i].vl53l0x.init();");
         if (!ok) { 
@@ -125,24 +125,6 @@ static int lvl53ring_init (lua_State *L) {
     }
 
     lua_pushboolean(L, true);
-	return 1;
-}
-
-static int lvl53ring_read (lua_State *L) {
-/*
-	driver_error_t *error;
-    uint16_t val;
-
-    val = vl53l0x->readRangeSingleMillimeters();
-
-    if (vl53l0x->timeoutOccurred()) { 
-        lua_pushinteger(L, val);
-        lua_pushstring(L, "timeout");
-        return 2;
-    }
-
-    lua_pushinteger(L, val);
-    */
 	return 1;
 }
 
@@ -238,7 +220,6 @@ static const luaL_Reg vl53ring[] = {
 //	{"attach", lvl53l0x_attach},
 //	{"detach", lvl53l0x_detach},
 	{"init", lvl53ring_init},
-	{"read", lvl53ring_read},
 	{"test", lvl53ring_test},
 	{"set_timeout", lvl53ring_set_timeout},
 	{"set_measurement_timing_budget", lvl53ring_set_measurement_timing_budget},

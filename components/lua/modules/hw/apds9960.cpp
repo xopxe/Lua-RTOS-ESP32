@@ -60,10 +60,10 @@ static void callback_sw_get_rgb(TimerHandle_t xTimer) {
 
     int status;
     if (ok) {
+        lua_pushinteger(TL, A);
         lua_pushinteger(TL, R);
         lua_pushinteger(TL, G);
         lua_pushinteger(TL, B);
-        lua_pushinteger(TL, A);
         if (hsv_mode) {
             status = lua_pcall(TL, 4, 0, 0);
         } else {
