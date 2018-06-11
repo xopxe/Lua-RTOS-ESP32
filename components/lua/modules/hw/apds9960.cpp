@@ -51,15 +51,12 @@ static void callback_sw_get_rgb(TimerHandle_t xTimer) {
     lua_xmove(L, TL, 1);
 
     //push reading
-    bool ok;
     uint16_t R;
     uint16_t G;
     uint16_t B;
     uint16_t A;
-    ok = sensor.readRedLight(R) 
-      && sensor.readGreenLight(G)
-      && sensor.readBlueLight(B)
-      && sensor.readAmbientLight(A);
+
+    bool ok = sensor.readColors(R, G, B, A);
 
     int status;
     if (ok) {
