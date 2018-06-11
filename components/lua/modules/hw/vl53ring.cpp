@@ -109,7 +109,7 @@ static int lvl53ring_init (lua_State *L) {
         usleep(50*1000);
         bool ok = sensors[i].vl53l0x.init();
         //printf("done: bool ok = sensors[i].vl53l0x.init();");
-        if (~ok) { 
+        if (!ok) { 
             /*lua_pushnil(L);
             lua_pushstring(L, "internal sensor failure");
             return 2;*/
@@ -119,7 +119,7 @@ static int lvl53ring_init (lua_State *L) {
         //printf("i2c remapping check %d renumber to %d\r\n", sensors[i].vl53l0x.getAddress(), remapaddress[i] );
         if (remapaddress[i]>0 && remapaddress[i]!=sensors[i].vl53l0x.getAddress()) {
             sensors[i].vl53l0x.setAddress(remapaddress[i]);
-            printf("i2c %d renumbered to %d\r\n", i, remapaddress[i] );
+            printf("i2c for vl53l0x %d renumbered to %d\r\n", i, remapaddress[i] );
         }
         
     }

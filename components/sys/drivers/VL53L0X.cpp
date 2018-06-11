@@ -14,6 +14,7 @@ extern "C"{
 #include <drivers/VL53L0X.h>
 //#include <Wire.h>
 #include "i2c_util.h"
+#include <byteswap.h>
 
 // Defines /////////////////////////////////////////////////////////////////////
 
@@ -58,7 +59,7 @@ VL53L0X::VL53L0X(void)
   , io_timeout(0) // no timeout
   , did_timeout(false)
 {
-  printf("In: VL53L0X::VL53L0X(void)\r\n");
+  //printf("In: VL53L0X::VL53L0X(void)\r\n");
 }
 
 // Public Methods //////////////////////////////////////////////////////////////
@@ -80,7 +81,7 @@ void VL53L0X::setAddress(uint8_t new_addr)
 bool VL53L0X::init(bool io_2v8)
 {
   // VL53L0X_DataInit() begin
-  printf("In: VL53L0X::init(bool io_2v8)\r\n");
+  //printf("In: VL53L0X::init(bool io_2v8)\r\n");
 
   driver_error_t *error;
 
@@ -961,22 +962,25 @@ bool VL53L0X::performSingleRefCalibration(uint8_t vhv_init_byte)
   return true;
 }
 
-
+//esp32: MSB first, VL53: MSB last.
 void VL53L0X::writeReg(uint8_t reg, uint8_t value) {
     i2c_util_writeReg(i2cdevice, address, reg, value);
 }
 void VL53L0X::writeReg16Bit(uint8_t reg, uint16_t value) {
-    i2c_util_writeReg16Bit(i2cdevice, address, reg, value);
+    uint16_t svalue = __bswap_16(value);
+    i2c_util_writeReg16Bit(i2cdevice, address, reg, svalue);
 }
 void VL53L0X::writeReg32Bit(uint8_t reg, uint32_t value) {
-    i2c_util_writeReg32Bit(i2cdevice, address, reg, value);
+    uint32_t svalue = __bswap_32(value);
+    i2c_util_writeReg32Bit(i2cdevice, address, reg, svalue);
 }
 
 uint8_t VL53L0X::readReg(uint8_t reg) {
     return i2c_util_readReg(i2cdevice, address, reg);
 }
 uint16_t VL53L0X::readReg16Bit(uint8_t reg) {
-    return i2c_util_readReg16Bit(i2cdevice, address, reg);
+    uint16_t svalue = i2c_util_readReg16Bit(i2cdevice, address, reg);
+    return __bswap_16(svalue);
 }
 int VL53L0X::writeMulti(uint8_t reg, uint8_t *val, unsigned int len){
     return i2c_util_writeMulti(i2cdevice, address, reg, val , len);

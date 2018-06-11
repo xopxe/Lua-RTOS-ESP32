@@ -59,7 +59,7 @@ static int lvl53l0x_init (lua_State *L) {
 
     bool ok = vl53l0x->init();
 
-    if (~ok) { 
+    if (!ok) { 
         lua_pushnil(L);
         lua_pushstring(L, "internal failure");
         return 2;

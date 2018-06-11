@@ -283,6 +283,8 @@ public:
     bool readRedLight(uint16_t &val);
     bool readGreenLight(uint16_t &val);
     bool readBlueLight(uint16_t &val);
+    bool readColors(uint16_t &red, uint16_t &green, 
+                    uint16_t &blue, uint16_t &ambient);
     
     /* Proximity methods */
     bool readProximity(uint8_t &val);

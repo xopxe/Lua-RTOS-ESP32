@@ -4,7 +4,6 @@
 //#include <cstdint>
 //#include <sys/driver.h>
 #include <drivers/i2c.h>
-#include <byteswap.h>
 
 
 static void i2c_util_print_driver_error(driver_error_t *error, int err) {
@@ -59,15 +58,13 @@ static void i2c_util_writeReg(int i2cdevice, uint8_t address, uint8_t reg, char 
 // Write a 16-bit register
 static void i2c_util_writeReg16Bit(int i2cdevice, uint8_t address, uint8_t reg, uint16_t value)
 {
-  uint16_t buff = __bswap_16 (value);
-  i2c_util_writeMulti(i2cdevice, address, reg, (uint8_t*)&buff, 2);
+  i2c_util_writeMulti(i2cdevice, address, reg, (uint8_t*)&value, 2);
 }
 
 // Write a 32-bit register
 static void i2c_util_writeReg32Bit(int i2cdevice, uint8_t address, uint8_t reg, uint32_t value)
 {
-  uint32_t buff = __bswap_32 (value);
-  i2c_util_writeMulti(i2cdevice, address, reg, (uint8_t*)&buff, 4);
+  i2c_util_writeMulti(i2cdevice, address, reg, (uint8_t*)&value, 4);
 }
 
 // Read an arbitrary number of bytes from the sensor, starting at the given
@@ -125,7 +122,7 @@ static uint16_t i2c_util_readReg16Bit(int i2cdevice, uint8_t address, uint8_t re
 {
   uint16_t value;
   i2c_util_readMulti(i2cdevice, address, reg, (uint8_t *)&value, 2);
-  return __bswap_16 (value);
+  return value;
 }
 
 // Read a 32-bit register
@@ -133,7 +130,7 @@ static uint32_t i2c_util_readReg32Bit(int i2cdevice, uint8_t address, uint8_t re
 {
   uint32_t value;
   i2c_util_readMulti(i2cdevice, address, reg, (uint8_t *)&value, 4);
-  return __bswap_32 (value);
+  return value;
 }
 
 
