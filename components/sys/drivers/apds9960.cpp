@@ -734,6 +734,24 @@ bool SparkFun_APDS9960::readBlueLight(uint16_t &val)
     return true;
 }
 
+
+bool SparkFun_APDS9960::readColors(
+     uint16_t &red, uint16_t &green, uint16_t &blue, uint16_t &ambient)
+{
+    uint16_t channels[4];
+
+    int read = wireReadDataBlock(APDS9960_CDATAL, (uint8_t*) channels, 4*2);
+    if (read<0) return false;
+
+    ambient = channels[0];
+    red = channels[1];
+    green = channels[2];
+    blue = channels[3];
+    
+    return true;
+}
+
+
 /*******************************************************************************
  * Proximity sensor controls
  ******************************************************************************/
