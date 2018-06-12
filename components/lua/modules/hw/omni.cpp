@@ -174,7 +174,7 @@ static int omni_raw_write (lua_State *L) {
 }
 
 static int omni_drive (lua_State *L) {
-	driver_error_t *error;
+	//driver_error_t *error;
 
     float x_dot = luaL_checknumber( L, 1 );
     float y_dot = luaL_checknumber( L, 2 );
@@ -182,7 +182,7 @@ static int omni_drive (lua_State *L) {
     float phi = luaL_optnumber( L, 4, 0.0 );
 
 	SF3dVector w = getW(x_dot, y_dot, w_dot, phi);
-    printf("omni computed vel %f %f %f\r\n", w.x, w.y, w.z);
+    //printf("omni computed vel %f %f %f\r\n", w.x, w.y, w.z);
 
     //printf("omni setting duty %d %d %d\r\n", px, py, pw);
 
@@ -211,7 +211,7 @@ LUALIB_API int luaopen_omni( lua_State *L ) {
 	return 1;
 }
 
-MODULE_REGISTER_RAM(VL53RING, omni, luaopen_omni, 1);
+MODULE_REGISTER_RAM(OMNI, omni, luaopen_omni, 1);
 
 
 /*
