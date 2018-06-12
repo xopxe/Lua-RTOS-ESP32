@@ -1,7 +1,7 @@
-v=require('apds9660')
+v=require('apds9960')
 assert(v.init())
 
-ms = ms or 1000
+ms = ms or 50
 
 -- callback for get_color_continuous
 -- will be called with (r,g,b,a [,h,s,v])
@@ -9,8 +9,8 @@ ms = ms or 1000
 -- r,g,b,a : 16 bits
 -- h: 0..360
 -- s,v: 0..255
-dump_rgb = function(a,r,g,b,h,s,v) 
-  print('ambient', a, 'rgb', r, g, b,'hsv', h, s, v) 
+dump_rgb = function(r,g,b,a,h,s,v, name) 
+  print('ambien:', a, 'rgb:', r, g, b,'hsv:', h, s, v, 'name:', name) 
 end
 
 -- callback for get_color_change
@@ -22,10 +22,17 @@ dump_color_change = function(color, s, v)
 end
 
 -- enable raw color monitoring, enable hsv mode
-v.get_color_continuous(ms, dump_rgb, true)
+--v.get_color_continuous(ms, dump_rgb, true)
 
 -- enable color change monitoring, enable hsv mode
 v.get_color_change(ms, dump_color_change)
+
+--[[
+while true do
+  tmr.sleepms(50)
+  print (v.get_rgb())
+end
+--]]
 
 -- run for 60 seconds
 tmr.sleepms(60*1000)

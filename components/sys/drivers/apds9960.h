@@ -295,7 +295,7 @@ public:
     
 private:
 
-    uint8_t address;
+    uint8_t address = APDS9960_I2C_ADDR;
     int i2cdevice;
 
     /* Gesture processing */
