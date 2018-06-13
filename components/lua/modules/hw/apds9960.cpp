@@ -32,6 +32,8 @@ int apds9960_get_colorchange_callback=LUA_REFNIL;
 
 bool hsv_mode = false;
 int current_color_i = -1;
+int saturation_threshold = 0;
+int value_threshold = 0;
 
 SparkFun_APDS9960 sensor;
 
@@ -143,6 +145,10 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
         rgb.g = G; //G<<8;
         rgb.b = B; //B<<8;
         RGB2HSV(rgb , hsv);
+        
+        if (hsv.s<saturation_threshold || hsv.v<value_threshold) {
+            return;
+        }
         
         int color_i = -1;
         //find color index in color_ranges[]
@@ -295,6 +301,8 @@ static int apds9960_get_ambient (lua_State *L) {
 
 static int apds9960_get_colorchange (lua_State *L) {
     bool enable = lua_toboolean(L, 1);
+    saturation_threshold = luaL_optinteger( L, 2, 0 );
+    value_threshold = luaL_optinteger( L, 3, 0 );
     if (enable) {
         if (apds9960_get_colorchange_callback!=LUA_REFNIL) {
             lua_pushnil(L);
