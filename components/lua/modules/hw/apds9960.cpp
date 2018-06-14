@@ -66,7 +66,7 @@ static void callback_sw_get_rgb(TimerHandle_t xTimer) {
         lua_pushinteger(TL, G);
         lua_pushinteger(TL, B);
         lua_pushinteger(TL, A);
-        if (hsv_mode) {
+        if (!hsv_mode) {
             status = lua_pcall(TL, 4, 0, 0);
         } else {
             HSV_set hsv;
@@ -301,8 +301,6 @@ static int apds9960_get_ambient (lua_State *L) {
 
 static int apds9960_get_colorchange (lua_State *L) {
     bool enable = lua_toboolean(L, 1);
-    saturation_threshold = luaL_optinteger( L, 2, 0 );
-    value_threshold = luaL_optinteger( L, 3, 0 );
     if (enable) {
         if (apds9960_get_colorchange_callback!=LUA_REFNIL) {
             lua_pushnil(L);
@@ -316,7 +314,8 @@ static int apds9960_get_colorchange (lua_State *L) {
             lua_pushstring(L, "invalid period");
             return 2;
 	    }
-	    hsv_mode = lua_toboolean(L, 3);
+        saturation_threshold = luaL_optinteger( L, 3, 0 );
+        value_threshold = luaL_optinteger( L, 4, 0 );
 
         //set timer for callback
 	    luaL_checktype(L, 2, LUA_TFUNCTION);
