@@ -356,36 +356,36 @@ static int apds9960_get_colorchange (lua_State *L) {
  *   - NB: if s == 0, then h = 0 (undefined)
  ******************************************************************************/
 static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV){
- unsigned char min, max, delta;
- 
- if(RGB.r<RGB.g)min=RGB.r; else min=RGB.g;
- if(RGB.b<min)min=RGB.b;
- 
- if(RGB.r>RGB.g)max=RGB.r; else max=RGB.g;
- if(RGB.b>max)max=RGB.b;
- 
- HSV.v = max;                // v, 0..255
- 
- delta = max - min;                      // 0..255, < v
- 
- if( max != 0 )
- HSV.s = (int)(delta)*255 / max;        // s, 0..255
- else {
- // r = g = b = 0        // s = 0, v is undefined
- HSV.s = 0;
- HSV.h = 0;
- return;
- }
- 
- if( RGB.r == max )
- HSV.h = (RGB.g - RGB.b)*60/delta;        // between yellow & magenta
- else if( RGB.g == max )
- HSV.h = 120 + (RGB.b - RGB.r)*60/delta;    // between cyan & yellow
- else
- HSV.h = 240 + (RGB.r - RGB.g)*60/delta;    // between magenta & cyan
- 
- if( HSV.h < 0 )
- HSV.h += 360;
+    unsigned char min, max, delta;
+
+    if(RGB.r<RGB.g)min=RGB.r; else min=RGB.g;
+    if(RGB.b<min)min=RGB.b;
+
+    if(RGB.r>RGB.g)max=RGB.r; else max=RGB.g;
+    if(RGB.b>max)max=RGB.b;
+
+    HSV.v = max;                // v, 0..255
+
+    delta = max - min;                      // 0..255, < v
+
+    if( max != 0 )
+        HSV.s = (int)(delta)*255 / max;        // s, 0..255
+    else {
+        // r = g = b = 0        // s = 0, v is undefined
+        HSV.s = 0;
+        HSV.h = 0;
+        return;
+    }
+
+    if( RGB.r == max )
+        HSV.h = (RGB.g - RGB.b)*60/delta;        // between yellow & magenta
+    else if( RGB.g == max )
+        HSV.h = 120 + (RGB.b - RGB.r)*60/delta;    // between cyan & yellow
+    else
+        HSV.h = 240 + (RGB.r - RGB.g)*60/delta;    // between magenta & cyan
+
+    if( HSV.h < 0 )
+        HSV.h += 360;
 }
 
 static const luaL_Reg apds9960[] = {
