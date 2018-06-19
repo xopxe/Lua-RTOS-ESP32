@@ -39,6 +39,18 @@ SparkFun_APDS9960 sensor;
 
 static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV);
 
+static int find_color_in_range(int v) {
+    int color_i = -1;
+    //find color index in color_ranges[]
+    for (int i=0; i<6; i++) {
+        if (hsv.v>=color_ranges[i].min && hsv.v<=color_ranges[i].max) {
+            color_i=i;
+            break;
+        }
+    }
+    return i;
+}
+
 static void callback_sw_get_rgb(TimerHandle_t xTimer) {
 	lua_State *TL;
 	lua_State *L;
@@ -79,14 +91,7 @@ static void callback_sw_get_rgb(TimerHandle_t xTimer) {
             lua_pushinteger(TL, hsv.s);
             lua_pushinteger(TL, hsv.v);
 
-            int color_i = -1;
-            //find color index in color_ranges[]
-            for (int i=0; i<6; i++) {
-                if (hsv.v>=color_ranges[i].min && hsv.v<=color_ranges[i].max) {
-                    color_i=i;
-                    break;
-                }
-            }
+            int color_i = find_color_in_range(hsv.v);
             lua_pushstring(TL, color_ranges[color_i].name);
 
             status = lua_pcall(TL, 8, 0, 0);
@@ -150,14 +155,7 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
             return;
         }
         
-        int color_i = -1;
-        //find color index in color_ranges[]
-        for (int i=0; i<6; i++) {
-            if (hsv.v>=color_ranges[i].min && hsv.v<=color_ranges[i].max) {
-                color_i=i;
-                break;
-            }
-        }
+        int color_i = find_color_in_range(hsv.v);
         
         if (color_i!=current_color_i) {
             current_color_i = color_i;
@@ -199,34 +197,6 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
     }
 }
 
-
-static int apds9960_init (lua_State *L) {
-    bool ok;
-    ok = sensor.init();
-    if (!ok) {
-        lua_pushnil(L);
-        lua_pushstring(L, "color sensor initalization failed");
-        return 2;
-    }
-    /*
-    ok = sensor.enablePower();
-    if (!ok) {
-        lua_pushnil(L);
-        lua_pushstring(L, "color sensor power up failed");
-        return 2;
-    }
-    */
-    /*
-    ok = sensor.enableLightSensor(false);
-    if (!ok) {
-        lua_pushnil(L);
-        lua_pushstring(L, "color sensor enable failed");
-        return 2;
-    }
-    */
-    lua_pushboolean(L, true);
-    return 1;
-}
 
 static int apds9960_enable_power (lua_State *L) {
     bool enable = lua_gettop(L)==0 || lua_toboolean( L, 1 );
@@ -510,7 +480,6 @@ static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV){
 
 
 static const luaL_Reg apds9960[] = {
-	{"init", apds9960_init},
 	{"enable_power", apds9960_enable_power},
 	{"set_LED_drive", apds9960_set_LED_drive},
     {NULL, NULL}
@@ -535,7 +504,15 @@ static const luaL_Reg apds9960_proximity[] = {
 
 
 LUALIB_API int luaopen_apds9960( lua_State *L ) {
-    //luaL_register(L,"vl53l0x", vl53l0x_map);
+    // initialize
+    bool ok = sensor.init();
+    if (!ok) {
+        lua_pushnil(L);
+        lua_pushstring(L, "init failed");
+        return 2;
+    }
+
+    //register
     luaL_newlib(L, apds9960);
 
     lua_newtable(L);

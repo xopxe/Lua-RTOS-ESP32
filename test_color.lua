@@ -1,19 +1,21 @@
-v=require('apds9960')
-assert(v.init())
+local apds = assert(require('apds9960'))
 
-ms = ms or 50
+local color = apds.color
+assert(color.enable())
 
--- callback for get_color_continuous
+ms = ms or 100
+
+-- callback for color.get_continuous
 -- will be called with (r,g,b,a [,h,s,v])
--- hsv will be provided if enabled on get_color_continuous
+-- hsv will be provided if enabled on color.get_continuous
 -- r,g,b,a : 16 bits
 -- h: 0..360
 -- s,v: 0..255
 dump_rgb = function(r,g,b,a,h,s,v, name) 
-  print('ambien:', a, 'rgb:', r, g, b,'hsv:', h, s, v, 'name:', name) 
+  print('ambient:', a, 'rgb:', r, g, b,'hsv:', h, s, v, 'name:', name) 
 end
 
--- callback for get_color_change
+-- callback for get_change
 -- will be called with (color, s, v)
 -- color: one of "red", "yellow", "green", "cyan", "blue", "magenta"
 -- s,v: 0..255
@@ -22,15 +24,15 @@ dump_color_change = function(color, s, v)
 end
 
 -- enable raw color monitoring, enable hsv mode
---v.get_color_continuous(ms, dump_rgb, true)
+--color.get_continuous(ms, dump_rgb, true)
 
 -- enable color change monitoring, enable hsv mode
-v.get_color_change(ms, dump_color_change)
+color.get_change(ms, dump_color_change)
 
 --[[
 while true do
   tmr.sleepms(50)
-  print (v.get_rgb())
+  print (color.get_rgb())
 end
 --]]
 
@@ -38,5 +40,5 @@ end
 tmr.sleepms(60*1000)
 
 -- stop monitoring distances
-v.get_color_continuous(false)
-v.get_color_change(false)
+color.get_continuous(false)
+color.get_change(false)
