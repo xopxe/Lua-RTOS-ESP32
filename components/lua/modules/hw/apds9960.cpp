@@ -40,15 +40,12 @@ SparkFun_APDS9960 sensor;
 static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV);
 
 static int find_color_in_range(int v) {
-    int color_i = -1;
-    //find color index in color_ranges[]
-    for (int i=0; i<6; i++) {
-        if (hsv.v>=color_ranges[i].min && hsv.v<=color_ranges[i].max) {
-            color_i=i;
-            break;
+    for (int color_i=0; color_i<N_NAMED_COLORS; color_i++) {
+        if (v>=color_ranges[color_i].min && v<=color_ranges[color_i].max) {
+            return color_i;
         }
     }
-    return i;
+    return -1;
 }
 
 static void callback_sw_get_rgb(TimerHandle_t xTimer) {

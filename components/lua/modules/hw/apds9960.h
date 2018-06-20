@@ -19,7 +19,8 @@ struct color_range {
     int max;
 };
 
-static const color_range color_ranges[6] = {
+#define N_NAMED_COLORS 6
+static const color_range color_ranges[N_NAMED_COLORS] = {
  {"red", 0, 60},
  {"yellow", 60, 120},
  {"green", 120, 180},
