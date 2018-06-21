@@ -123,7 +123,7 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
 	lua_State *L;
 	int tref;
 
-    /*    
+    /*
     L = pvGetLuaState();
     TL = lua_newthread(L);
 
@@ -147,13 +147,13 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
         rgb.g = G; //G<<8;
         rgb.b = B; //B<<8;
         RGB2HSV(rgb , hsv);
-        
+
         if (hsv.s<saturation_threshold || hsv.v<value_threshold) {
             return;
         }
-        
+
         int color_i = find_color_in_range(hsv.v);
-        
+
         if (color_i!=current_color_i) {
             current_color_i = color_i;
 
@@ -173,7 +173,7 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
         } else {
             return; //no changes
         }
-        
+
     } else {
         //prepare thread
         L = pvGetLuaState();
@@ -194,6 +194,16 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
     }
 }
 
+static int apds9960_init (lua_State *L) {
+  bool ok = sensor.init();
+  if (!ok) {
+      lua_pushnil(L);
+      lua_pushstring(L, "init failed");
+      return 2;
+  }
+  lua_pushboolean(L, true);
+  return 1;
+}
 
 static int apds9960_enable_power (lua_State *L) {
     bool enable = lua_gettop(L)==0 || lua_toboolean( L, 1 );
@@ -304,7 +314,7 @@ static int apds9960_color_get_continuous (lua_State *L) {
 	    luaL_checktype(L, 2, LUA_TFUNCTION);
         lua_pushvalue(L, 2);
         apds9960_color_get_rgb_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-        apds9960_color_get_rgb_timer = xTimerCreate("apds9960rgb", millis / portTICK_PERIOD_MS, pdTRUE, 
+        apds9960_color_get_rgb_timer = xTimerCreate("apds9960rgb", millis / portTICK_PERIOD_MS, pdTRUE,
             (void *)apds9960_color_get_rgb_timer, callback_sw_get_rgb);
         xTimerStart(apds9960_color_get_rgb_timer, 0);
     } else {
@@ -408,7 +418,7 @@ static int apds9960_color_get_change (lua_State *L) {
 	    luaL_checktype(L, 2, LUA_TFUNCTION);
         lua_pushvalue(L, 2);
         apds9960_color_get_change_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-        apds9960_color_get_change_timer = xTimerCreate("apds9960colorchange", millis / portTICK_PERIOD_MS, pdTRUE, 
+        apds9960_color_get_change_timer = xTimerCreate("apds9960colorchange", millis / portTICK_PERIOD_MS, pdTRUE,
             (void *)apds9960_color_get_change_timer, callback_sw_get_colorchange);
         xTimerStart(apds9960_color_get_change_timer, 0);
     } else {
@@ -477,6 +487,7 @@ static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV){
 
 
 static const luaL_Reg apds9960[] = {
+  {"init", apds9960_init},
 	{"enable_power", apds9960_enable_power},
 	{"set_LED_drive", apds9960_set_LED_drive},
     {NULL, NULL}
@@ -501,13 +512,6 @@ static const luaL_Reg apds9960_proximity[] = {
 
 
 LUALIB_API int luaopen_apds9960( lua_State *L ) {
-    // initialize
-    bool ok = sensor.init();
-    if (!ok) {
-        lua_pushnil(L);
-        lua_pushstring(L, "init failed");
-        return 2;
-    }
 
     //register
     luaL_newlib(L, apds9960);
