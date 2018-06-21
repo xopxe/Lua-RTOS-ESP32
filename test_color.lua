@@ -1,5 +1,5 @@
 local apds = assert(require('apds9960'))
-
+assert(apds.init())
 local color = apds.color
 assert(color.enable())
 
@@ -11,16 +11,16 @@ ms = ms or 100
 -- r,g,b,a : 16 bits
 -- h: 0..360
 -- s,v: 0..255
-dump_rgb = function(r,g,b,a,h,s,v, name) 
-  print('ambient:', a, 'rgb:', r, g, b,'hsv:', h, s, v, 'name:', name) 
+dump_rgb = function(r,g,b,a,h,s,v, name)
+  print('ambient:', a, 'rgb:', r, g, b,'hsv:', h, s, v, 'name:', name)
 end
 
 -- callback for get_change
 -- will be called with (color, s, v)
 -- color: one of "red", "yellow", "green", "cyan", "blue", "magenta"
 -- s,v: 0..255
-dump_color_change = function(color, s, v) 
-  print('color', color, 'sv', s, v) 
+dump_color_change = function(c, s, v)
+  print('color', c, 'sv', s, v)
 end
 
 -- enable raw color monitoring, enable hsv mode

@@ -24,9 +24,9 @@ extern "C"{
 #include <drivers/VL53L0X.h>
 #include <drivers/gpio.h>
 
-#define NSENSORS 2
-#define XSHUT_PINS {16,17}
-#define REMAPADDRESS {42, 43}  // {0x2A, 0x2B}
+#define NSENSORS 6
+#define XSHUT_PINS {16,17,4,14,12,13}
+#define REMAPADDRESS {46,47,42,43,44,45}  // {0x2A, 0x2B}
 
 
 TimerHandle_t vl53ring_get_timer;
@@ -74,7 +74,7 @@ static int lvl53ring_init (lua_State *L) {
     int xshut_pins[] = XSHUT_PINS;
     int remapaddress[] = REMAPADDRESS;
 
-    //put all sensors in rest
+    //put all sensors in reset
     for (int i=0; i<NSENSORS; i++) {
         int pin = xshut_pins[i];
         sensors[i].xshut_pin = pin;
@@ -91,11 +91,11 @@ static int lvl53ring_init (lua_State *L) {
             lua_pushinteger(L, pin);
         	return 3;
         }
-        
+
     }
     usleep(5*1000);
 
-    //init sensors and renumber        
+    //init sensors and renumber
     for (int i=0; i<NSENSORS; i++) {
         int pin = xshut_pins[i];
 
@@ -105,23 +105,24 @@ static int lvl53ring_init (lua_State *L) {
             lua_pushinteger(L, pin);
         	return 3;
         }
-        
+
         usleep(5*1000);
-        bool ok = sensors[i].vl53l0x.init();
+        bool ok = sensors[i].vl53l0x.init(true);
         //printf("done: bool ok = sensors[i].vl53l0x.init();");
-        if (!ok) { 
+        if (!ok) {
             /*lua_pushnil(L);
             lua_pushstring(L, "internal sensor failure");
             return 2;*/
-            printf("warning: internal sensor failure\r\n");
+            printf("ring: warning: internal sensor failure\r\n");
         }
 
         //printf("i2c remapping check %d renumber to %d\r\n", sensors[i].vl53l0x.getAddress(), remapaddress[i] );
         if (remapaddress[i]>0 && remapaddress[i]!=sensors[i].vl53l0x.getAddress()) {
             sensors[i].vl53l0x.setAddress(remapaddress[i]);
-            printf("i2c for vl53l0x %d renumbered to %d\r\n", i, remapaddress[i] );
+            printf("ring: i2c for vl53l0x %d renumbered to %d\r\n", i, remapaddress[i] );
+            //printf("ring: i2c vl53l0x %d measure %d\r\n", i, sensors[i].vl53l0x.readRangeSingleMillimeters());
         }
-        
+
     }
 
     lua_pushboolean(L, true);
@@ -134,7 +135,7 @@ static int lvl53ring_test (lua_State *L) {
 
     val = vl53l0x->readRangeSingleMillimeters();
 
-    if (vl53l0x->timeoutOccurred()) { 
+    if (vl53l0x->timeoutOccurred()) {
         lua_pushinteger(L, val);
         lua_pushstring(L, "timeout");
         return 2;

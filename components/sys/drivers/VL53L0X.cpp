@@ -85,16 +85,15 @@ bool VL53L0X::init(bool io_2v8)
 
   driver_error_t *error;
 
- 
+
 	uint8_t i2c = CONFIG_VL53L0X_I2C_CHANNEL;
 	if ((error=i2c_attach(i2c, I2C_MASTER, CONFIG_VL53L0X_SPEED, 0, 0, &i2cdevice))) {
     	i2c_util_print_driver_error(error, -10);
     	return false;
   }
 
-
   // sensor uses 1V8 mode for I/O by default; switch to 2V8 mode if necessary
-  if (io_2v8)
+  if (io_2v8==true)
   {
     writeReg(VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV,
       readReg(VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV) | 0x01); // set bit 0

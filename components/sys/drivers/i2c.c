@@ -288,7 +288,7 @@ driver_error_t *i2c_flush(int deviceid, int *transaction, int new_transaction) {
 driver_error_t *i2c_pin_map(int unit, int sda, int scl) {
     // Sanity checks
     if (!((1 << unit) & CPU_I2C_ALL)) {
-        return driver_error(I2C_DRIVER, I2C_ERR_INVALID_UNIT, NULL);
+        return driver_error(I2C_DRIVER, I2C_ERR_INVALID_UNIT, "invalid unit on pin map");
     }
 
     i2c_lock(unit);
@@ -348,7 +348,7 @@ driver_error_t *i2c_attach(int unit, int mode, int speed, int addr10_en,
 
     // Sanity checks
     if (!((1 << unit) & CPU_I2C_ALL)) {
-        return driver_error(I2C_DRIVER, I2C_ERR_INVALID_UNIT, NULL);
+        return driver_error(I2C_DRIVER, I2C_ERR_INVALID_UNIT, "invalid unit on attach");
     }
 
     if ((speed < 0) || (speed == 0)) {
@@ -409,7 +409,7 @@ driver_error_t *i2c_attach(int unit, int mode, int speed, int addr10_en,
     int device = i2c_get_free_device(unit);
     if (device < 0) {
         // No more devices
-        return driver_error(I2C_DRIVER, I2C_ERR_NO_MORE_DEVICES_ALLOWED, NULL);
+        return driver_error(I2C_DRIVER, I2C_ERR_NO_MORE_DEVICES_ALLOWED, "no more devices allowed");
     }
 
     i2c[unit].device[device].speed = speed;
