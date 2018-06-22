@@ -71,7 +71,6 @@ int __wrap__rename_r(struct _reent *r, const char *src, const char *dst) {
         return -1;
     }
 
-
     ppath_src = mount_resolve_to_physical(src);
     if (!ppath_src) {
         return -1;
@@ -81,6 +80,14 @@ int __wrap__rename_r(struct _reent *r, const char *src, const char *dst) {
     if (!ppath_dst) {
         free(ppath_src);
         return -1;
+    }
+
+    // If src and dst file are the same, do noting and exit
+    if (strcmp(ppath_src, ppath_dst) == 0) {
+        free(ppath_src);
+        free(ppath_dst);
+
+        return 0;
     }
 
     res = __real__rename_r(r, ppath_src, ppath_dst);

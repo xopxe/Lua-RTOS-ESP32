@@ -39,7 +39,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Lua RTOS chdir wrapper
+ * Lua RTOS, chdir implementation
  *
  */
 
@@ -54,81 +54,27 @@
 #include <sys/mount.h>
 #include <sys/fcntl.h>
 
-char currdir[PATH_MAX + 1] = "";
+char currdir[PATH_MAX + 1] = "/";
 
 int chdir(const char *path) {
     struct stat statb;
-    char *ppath;
-    char *lpath;
-    int fd;
 
     if (!path || !*path) {
         errno = ENOENT;
         return -1;
     }
 
-    if (strlen(path) > PATH_MAX) {
-        errno = ENAMETOOLONG;
+    char *npath = mount_normalize_path(path);
+
+    if (stat(npath, &statb) || !S_ISDIR(statb.st_mode)) {
+        free(npath);
+        errno = ENOTDIR;
         return -1;
     }
 
-    ppath = mount_resolve_to_physical(path);
-    if (!ppath) {
-        return -1;
-    }
+    strncpy(currdir, npath, PATH_MAX);
 
-    // Check for path existence
-    if (strncmp(ppath, "/fat/", 5)) {
-        if ((fd = open(path, O_RDONLY)) == -1) {
-            errno = ENOTDIR;
-            free(ppath);
-            return -1;
-        }
-
-        lpath = mount_resolve_to_logical(ppath);
-        if (!lpath) {
-            errno = ENOTDIR;
-            free(lpath);
-            free(ppath);
-            return -1;
-        }
-
-        if (fstat(fd, &statb) || !S_ISDIR(statb.st_mode)) {
-            free(lpath);
-            free(ppath);
-            errno = ENOTDIR;
-            close(fd);
-            return -1;
-        }
-    } else {
-        if (!strcmp(ppath, "/fat/")) {
-            strncpy(currdir, "/sd", PATH_MAX);
-            free(ppath);
-            return 0;
-        }
-
-        lpath = mount_resolve_to_logical(ppath);
-        if (!lpath) {
-            errno = ENOTDIR;
-            free(lpath);
-            free(ppath);
-            return -1;
-        }
-
-        if (stat(lpath, &statb) || !S_ISDIR(statb.st_mode)) {
-            free(lpath);
-            free(ppath);
-            errno = ENOTDIR;
-            return -1;
-        }
-    }
-
-    strncpy(currdir, lpath, PATH_MAX);
-
-    free(lpath);
-    free(ppath);
-
-    close(fd);
+    free(npath);
 
     return 0;
 }

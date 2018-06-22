@@ -51,7 +51,6 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/syslog.h>
-#include <sys/mount.h>
 #include <sys/path.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -401,67 +400,23 @@ void send_file(http_request_handle *request, char *path, struct stat *statbuf) {
 	} else if (is_lua(path)) {
 		fclose(file);
 
-		char ppath[PATH_MAX];
+		char ppath[PATH_MAX + 1];
 
 		strcpy(ppath, path);
-		if (strlen(ppath) < PATH_MAX - 1) {
+		if (strlen(ppath) < PATH_MAX) {
 			strcat(ppath, "p");
 
-			//on fat use the modification time
-			if (strcmp((const char *)mount_device(ppath),"fat") == 0) {
-				time_t src_mtime = statbuf->st_mtime;
+			// Store .lua file modified time
+			time_t src_mtime = statbuf->st_mtime;
 
-				if (stat(ppath, statbuf) == 0) {
-					if (src_mtime > statbuf->st_mtime) {
-						//syslog(LOG_WARNING, "re-preprocessing %s due to mtime %i > %i\n", path, src_mtime, statbuf->st_mtime);
-						http_preprocess_lua_page(path,ppath);
-					}
-				}
-				else {
-					http_preprocess_lua_page(path,ppath);
-				}
-			}
-			else {
-				// after modifying a .lua file, the developer
-				// is responsible for deleting the preprocessed
-				// file as there is no "date" in the file system
-
-				// we preprocess in case the preprocessed file does not exist
-				if (stat(ppath, statbuf) != 0) {
-					http_preprocess_lua_page(path,ppath);
-				}
-				else {
-					// but do our best to find out if the source file was modified
-					char *dirsep = (char*)ppath + strlen(ppath) - 1;
-					while (dirsep > ppath && *dirsep!=0 && *dirsep!='/') {
-						dirsep--;
-					}
-					if (*dirsep=='/') {
-						int filename_length = ppath + strlen(ppath) - (dirsep + 1);
-						char* filename = dirsep + 1;
-
-						*dirsep = 0;
-						DIR *dir = opendir(ppath);
-						if (dir) {
-							struct dirent *ent;
-							while ((ent = readdir(dir)) != NULL) {
-								if (0==strcmp(filename, ent->d_name)) {
-									//syslog(LOG_WARNING, "re-preprocessing %s due file system order, found %s first\n", path, filename);
-									*dirsep = '/'; //fix ppath before using it
-									http_preprocess_lua_page(path,ppath);
-									break;
-								}
-								if (0==strncmp(filename, ent->d_name, filename_length-1)) {
-									//syslog(LOG_WARNING, "not re-preprocessing %s due file system order\n", path);
-									break;
-								}
-							}
-						}
-						closedir(dir);
-						*dirsep = '/';
-					}
-				}
-			}
+			// Get .luap file modified time
+            if (stat(ppath, statbuf) == 0) {
+                if (src_mtime > statbuf->st_mtime)  {
+                    http_preprocess_lua_page(path,ppath);
+                }
+            } else {
+                http_preprocess_lua_page(path,ppath);
+            }
 
 			if (S_ISDIR(statbuf->st_mode)) {
 				send_error(request, 500, "Internal Server Error", NULL, "Folder found where a precompiled file is expected.");
@@ -773,9 +728,10 @@ int process(http_request_handle *request) {
 		return 0;
 	}
 
-	request->method = strtok(reqbuf, " ");
-	request->path = strtok(NULL, " ");
-	protocol = strtok(NULL, "\r");
+	char *save_ptr = NULL;
+	request->method = strtok_r(reqbuf, " ", &save_ptr);
+	request->path = strtok_r(NULL, " ", &save_ptr);
+	protocol = strtok_r(NULL, "\r", &save_ptr);
 
 	if(!request->path) {
 		len = strlen(request->method)-1;
@@ -815,8 +771,9 @@ int process(http_request_handle *request) {
 
 				//check if the line begins with "Host:"
 				if (host==(char *)pathbuf) {
-					host = strtok(host, ":");  //Host:
-					host = strtok(NULL, "\r"); //the actual host
+					save_ptr = NULL;
+					host = strtok_r(host, ":", &save_ptr);  //Host:
+					host = strtok_r(NULL, "\r", &save_ptr); //the actual host
 					while(*host==' ') host++;  //skip spaces after the :
 
 					if (0 == strcasecmp(CAPTIVE_SERVER_NAME, host) ||
@@ -869,8 +826,9 @@ int process(http_request_handle *request) {
 
 					//check if the line begins with "Content-Length:"
 					if (contentlen==(char *)pathbuf) {
-						contentlen = strtok(contentlen, ":");  //Content-Length:
-						contentlen = strtok(NULL, "\r"); //the actual content length
+						save_ptr = NULL;
+						contentlen = strtok_r(contentlen, ":", &save_ptr);  //Content-Length:
+						contentlen = strtok_r(NULL, "\r", &save_ptr); //the actual content length
 						while(*contentlen==' ') contentlen++;  //skip spaces after the :
 						contentlength = atoi(contentlen)+1;
 					}
@@ -970,7 +928,10 @@ static void http_net_callback(system_event_t *event){
 		case SYSTEM_EVENT_STA_START:                /**< ESP32 station start */
 			//only if we have previously been in AP mode
 			if (wifi_mode == WIFI_MODE_AP) {
-				free((void*)esp_wifi_get_mode(&wifi_mode));
+				driver_error_t *error;
+				if ((error = wifi_check_error(esp_wifi_get_mode(&wifi_mode)))) {
+					free(error);
+				}
 
 				syslog(LOG_DEBUG, "http: switched to non-captive mode\n");
 				http_captiverun = captivedns_running();
@@ -987,7 +948,9 @@ static void http_net_callback(system_event_t *event){
 				driver_error_t *error;
 				ifconfig_t info;
 
-				free((void*)esp_wifi_get_mode(&wifi_mode));
+				if ((error = wifi_check_error(esp_wifi_get_mode(&wifi_mode)))) {
+					free(error);
+				}
 				if ((error = wifi_stat(&info))) {
 					free(error);
 					strcpy(ip4addr, "0.0.0.0");
