@@ -24,9 +24,10 @@ extern "C"{
 #include <drivers/VL53L0X.h>
 #include <drivers/gpio.h>
 
-#define NSENSORS 6
-#define XSHUT_PINS {16,17,4,14,12,13}
-#define REMAPADDRESS {46,47,42,43,44,45}  // {0x2A, 0x2B}
+#define ADDRESS_DEFAULT 0b0101001
+//#define NSENSORS 6
+//#define XSHUT_PINS {16,17,4,14,12,13}
+//#define REMAPADDRESS {42,43,44,45,46,47}  // {0x2A, 0x2B}
 
 
 TimerHandle_t vl53ring_get_timer;
@@ -38,7 +39,8 @@ typedef struct {
 } sensor_t;
 
 
-static sensor_t sensors[NSENSORS];
+static sensor_t *sensors;
+int n_sensors;
 
 static void callback_sw_dist(TimerHandle_t xTimer) {
 	lua_State *TL;
@@ -54,12 +56,12 @@ static void callback_sw_dist(TimerHandle_t xTimer) {
     lua_xmove(L, TL, 1);
 
     //push reading
-    for (int i=0; i<NSENSORS; i++) {
+    for (int i=0; i<n_sensors; i++) {
         uint16_t dist = sensors[i].vl53l0x.readRangeContinuousMillimeters();
         lua_pushinteger(TL, dist);
     }
 
-    int status = lua_pcall(TL, NSENSORS, 0, 0);
+    int status = lua_pcall(TL, n_sensors, 0, 0);
     luaL_unref(TL, LUA_REGISTRYINDEX, tref);
 
     if (status != LUA_OK) {
@@ -71,13 +73,50 @@ static void callback_sw_dist(TimerHandle_t xTimer) {
 static int lvl53ring_init (lua_State *L) {
 	driver_error_t *error;
 
-    int xshut_pins[] = XSHUT_PINS;
-    int remapaddress[] = REMAPADDRESS;
+    if (lua_type(L,1)!=LUA_TTABLE) {
+        lua_pushnil(L);
+        lua_pushstring(L, "bad parameter, must be table");
+    	return 2;
+    }
+
+    lua_len(L,1);
+    n_sensors = luaL_checkinteger( L, -1 );
+    printf("n_sensors=%i\r\n", n_sensors);
+
+    sensors = new sensor_t [n_sensors];
+    //int xshut_pins[n_sensors];
+    int remapaddress[n_sensors];
+
+    for (int i=1; i<=n_sensors; i++) {
+        lua_rawgeti(L,1, i); // entry at stack top
+        {
+            if (lua_type(L,1)!=LUA_TTABLE) {
+                lua_pushnil(L);
+                lua_pushstring(L, "bad entry in parameter, must be table");
+            	return 2;
+            }
+
+            lua_rawgeti(L,-1,1); // first entry
+            int xshut = lua_tointeger(L,-1);
+            lua_pop(L,1);
+
+            lua_rawgeti(L,-1,2); // second entry
+            int newaddr = luaL_optinteger(L,-1, 0);
+            if (newaddr<=0) newaddr = ADDRESS_DEFAULT + i;
+            lua_pop(L,1);
+
+            printf("xshut=%i newaddr=%i\r\n", xshut, newaddr);
+            sensors[i-1].xshut_pin = xshut;
+            remapaddress[i-1] = newaddr;
+            
+        }
+        lua_pop(L, 1); // pop entry
+    }
+
 
     //put all sensors in reset
-    for (int i=0; i<NSENSORS; i++) {
-        int pin = xshut_pins[i];
-        sensors[i].xshut_pin = pin;
+    for (int i=0; i<n_sensors; i++) {
+        int pin = sensors[i].xshut_pin;
 
         if ((error = gpio_pin_output(pin))) {
             lua_pushnil(L);
@@ -96,8 +135,8 @@ static int lvl53ring_init (lua_State *L) {
     usleep(5*1000);
 
     //init sensors and renumber
-    for (int i=0; i<NSENSORS; i++) {
-        int pin = xshut_pins[i];
+    for (int i=0; i<n_sensors; i++) {
+        int pin = sensors[i].xshut_pin;
 
         if ((error = gpio_pin_set(pin))) {
             lua_pushnil(L);
@@ -149,7 +188,7 @@ static int lvl53ring_test (lua_State *L) {
 static int lvl53ring_set_timeout (lua_State *L) {
     uint16_t timeout = luaL_checkinteger( L, 1 );
 
-    for (int i=0; i<NSENSORS; i++) {
+    for (int i=0; i<n_sensors; i++) {
         sensors[i].vl53l0x.setTimeout(timeout);
     }
 
@@ -160,7 +199,7 @@ static int lvl53ring_set_timeout (lua_State *L) {
 static int lvl53ring_set_measurement_timing_budget (lua_State *L) {
     uint16_t us = luaL_checkinteger( L, 1 );
 
-    for (int i=0; i<NSENSORS; i++) {
+    for (int i=0; i<n_sensors; i++) {
         sensors[i].vl53l0x.setMeasurementTimingBudget(us);
     }
 
@@ -185,7 +224,7 @@ static int lvl53ring_get_continuous (lua_State *L) {
 	    }
 
         //set sensor mode
-        for (int i=0; i<NSENSORS; i++) {
+        for (int i=0; i<n_sensors; i++) {
             sensors[i].vl53l0x.startContinuous(millis);
         }
 
@@ -203,7 +242,7 @@ static int lvl53ring_get_continuous (lua_State *L) {
         }
 
         //reset sensor mode
-        for (int i=0; i<NSENSORS; i++) {
+        for (int i=0; i<n_sensors; i++) {
             sensors[i].vl53l0x.stopContinuous();
         }
 

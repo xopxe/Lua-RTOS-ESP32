@@ -1,3 +1,14 @@
+-- { {xshutpin, [newadddr]}, ... }
+local sensors = {
+ {16},
+ {17},
+ {4},
+ {14},
+ {12},
+ {13},
+}
+
+
 v=require('vl53ring')
 assert(v.init())
 
