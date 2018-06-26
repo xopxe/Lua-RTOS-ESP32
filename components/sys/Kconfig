@@ -1278,7 +1278,15 @@ menu "Lua RTOS"
                default y
 
             config LUA_RTOS_LUA_USE_OMNI
-               bool "Include robotito onidirectional control"
+               bool "Include robotito omnidirectional control, servo"
+               default n
+
+            config LUA_RTOS_LUA_USE_OMNIHBRIDGE
+               bool "Include robotito omnidirectional control, H-bridge"
+               default y
+
+            config LUA_RTOS_LUA_USE_DRV8833
+               bool "Include DRV8833 driver"
                default y
 
             config VL53L0X_I2C_CHANNEL

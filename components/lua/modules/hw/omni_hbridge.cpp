@@ -1,5 +1,8 @@
+#include "sdkconfig.h"
+#if CONFIG_LUA_RTOS_LUA_USE_OMNIHBRIDGE
+
 #define NMOTORS 3
-#define MOTOR_PINS {25,26,27}
+#define MOTOR_PINS {25,26, 27,28, 29,30}
 
 #define OMNI_CTRL_TIMER 50 //ms
 
@@ -14,10 +17,6 @@
 #define SERVO_CCW_DTY_MAX 2500
 */
 
-#include "sdkconfig.h"
-
-#if CONFIG_LUA_RTOS_LUA_USE_OMNI
-
 #ifdef __cplusplus
 extern "C"{
 #endif
@@ -26,7 +25,6 @@ extern "C"{
 #include "freertos/adds.h"
 
 #include "modules.h"
-#include "error.h"
 
 #include <drivers/cpu.h>
 #include "freertos/timers.h"
@@ -39,11 +37,11 @@ extern "C"{
   #include "lauxlib.h"
 #endif
 
-#include <drivers/servo.h>
+#include <drivers/drv8833.h>
 #include "vector_math.h"
 
 typedef struct {
-	servo_instance_t *instance;
+	Drv8833 *driver;
     float target_v;
     float current_v;
 } servo_t;
@@ -98,12 +96,7 @@ static void callback_sw_func(TimerHandle_t xTimer) {
                 motors[i].current_v = motors[i].target_v;
         }
         if (dirty) {
-            driver_error_t *error;
-            int v=motors[i].current_v+90;
-            if ((error = servo_write(motors[i].instance, v))) {
-                printf ("Error setting speed on motor %d\r\n", i);
-                free (error);
-            }
+            motors[i].driver->setMotorSpeed(motors[i].current_v);
         }
     }
 
@@ -111,24 +104,23 @@ static void callback_sw_func(TimerHandle_t xTimer) {
 
 
 static int omni_init (lua_State *L) {
-	driver_error_t *error;
     int8_t default_pins[] = MOTOR_PINS;
 
     robot_r = luaL_checknumber(L, 1);
 
     for (int i=0; i<NMOTORS; i++) {
-        int8_t pin = luaL_optinteger( L, i+2, default_pins[i] );
+        int8_t pin1 = luaL_optinteger( L, (2*i)+2, default_pins[2*i] );
+        int8_t pin2 = luaL_optinteger( L, (2*i)+3, default_pins[2*i+1] );
 
-        printf("omni Setting motor %d on pin %d", i, pin);
-        if ((error = servo_setup(pin, &(motors[i].instance)))) {
-        	return luaL_driver_error(L, error);
-        }
+        printf("omni Setting motor %d on pins %d,%d", i, pin1, pin2);
+        motors[i].driver=new Drv8833(pin1, pin2);
         printf(" done\r\n");
         motors[i].current_v=0;
         motors[i].target_v=0;
     }
 
-    motor_control_timer = xTimerCreate("omni", OMNI_CTRL_TIMER / portTICK_PERIOD_MS, pdTRUE, (void *)motor_control_timer, callback_sw_func);
+    motor_control_timer = xTimerCreate("omni_hbridge", OMNI_CTRL_TIMER / portTICK_PERIOD_MS, pdTRUE, 
+                            (void *)motor_control_timer, callback_sw_func);
     /*xTimerStart(motor_control_timer, 0);*/
 
     lua_pushboolean(L, true);
@@ -136,21 +128,20 @@ static int omni_init (lua_State *L) {
 }
 
 static int omni_set_enable (lua_State *L) {
-	driver_error_t *error;
     bool success = true;
     bool enable = lua_gettop(L)==0 || lua_toboolean( L, 1 );
 
     if (enable) {
         xTimerStart(motor_control_timer, 0);
+        for (int i=0; i<NMOTORS; i++) {
+            motors[i].current_v=0;
+            motors[i].driver->startMotor();
+        }
     } else {
         xTimerStop(motor_control_timer, 0);
         for (int i=0; i<NMOTORS; i++) {
             motors[i].current_v=0;
-            if ((error = servo_write(motors[i].instance, 90))) {
-                printf ("Error stopping motor %d\r\n", i);
-                free (error);
-                success=false;
-            }
+            motors[i].driver->stopMotor();
         }
     }
 
@@ -160,12 +151,9 @@ static int omni_set_enable (lua_State *L) {
 
 
 static int omni_raw_write (lua_State *L) {
-	driver_error_t *error;
     for (int i=0; i<NMOTORS; i++) {
         double value = luaL_optnumber( L, i+1, 0 );
-        if ((error = servo_write(motors[i].instance, value))) {
-        	return luaL_driver_error(L, error);
-        }
+        motors[i].driver->setMotorSpeed(value);
     }
 
     lua_pushboolean(L, true);
@@ -173,8 +161,6 @@ static int omni_raw_write (lua_State *L) {
 }
 
 static int omni_drive (lua_State *L) {
-	//driver_error_t *error;
-
     float x_dot = luaL_checknumber( L, 1 );
     float y_dot = luaL_checknumber( L, 2 );
     float w_dot = luaL_checknumber( L, 3 );
@@ -194,7 +180,7 @@ static int omni_drive (lua_State *L) {
 }
 
 
-static const luaL_Reg omni[] = {
+static const luaL_Reg omni_hbridge[] = {
 //	{"attach", lvl53l0x_attach},
 //	{"detach", lvl53l0x_detach},
 	{"init", omni_init},
@@ -204,13 +190,13 @@ static const luaL_Reg omni[] = {
     {NULL, NULL}
 };
 
-LUALIB_API int luaopen_omni( lua_State *L ) {
+LUALIB_API int luaopen_omni_hbridge( lua_State *L ) {
     //luaL_register(L,"vl53l0x", vl53l0x_map);
-    luaL_newlib(L, omni);
+    luaL_newlib(L, omni_hbridge);
 	return 1;
 }
 
-MODULE_REGISTER_RAM(OMNI, omni, luaopen_omni, 1);
+MODULE_REGISTER_RAM(OMNIHBRIDGE, omni_hbridge, luaopen_omni_hbridge, 1);
 
 
 /*
