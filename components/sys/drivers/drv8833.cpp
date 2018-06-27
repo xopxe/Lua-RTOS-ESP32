@@ -44,6 +44,18 @@ extern "C"{
 #include <drivers/pwm.h>
 #include <drivers/gpio.h>
 
+static void print_driver_error(driver_error_t *error, int err) {
+/*
+  if (error->msg) {
+  	printf(" DRIVER ERROR [%d]: type: %d, unit: %d, exc: %d msg:%s\r\n", err, error->type, error->unit, error->exception, error->msg);
+  } else{
+  	printf(" DRIVER ERROR [%d]: type: %d, unit: %d, exc: %d msg:NULL\r\n", err, error->type, error->unit, error->exception);
+  }
+*/
+	printf(" DRIVER ERROR [%d]\r\n", err);
+	free(error);
+}
+
 /**
 * A default constructor requiring no arguments. If this constructor is used, then pins six and nine are used for the motor controller.
 *
@@ -63,18 +75,32 @@ Drv8833::Drv8833() {
 * @return a Drv8833 object using the pins specified
 */
 Drv8833::Drv8833(int intIn1, int intIn2) {
+	driver_error_t *error;
+
 	pin1 = intIn1;
 	pin2 = intIn2;
 
 	//pinMode(pin1, OUTPUT);
 	//pinMode(pin2, OUTPUT);
-    gpio_pin_output(pin1);
-    gpio_pin_output(pin2);
-    gpio_pin_clr(pin1);
-    gpio_pin_clr(pin2);
+	gpio_pin_output(pin1);
+	gpio_pin_output(pin2);
+	gpio_pin_clr(pin1);
+	gpio_pin_clr(pin2);
 
-    pwm_setup(0, -1, pin1, 500, 0, &pwm_channel1);
-    pwm_setup(0, -1, pin2, 500, 0, &pwm_channel2);
+
+	if ((error=pwm_setup(0, -1, pin1, 1000, 0, &pwm_channel1))) {
+	    	print_driver_error(error, 1);
+	}
+	if ((error=pwm_setup(0, -1, pin2, 1000, 0, &pwm_channel2))) {
+	    	print_driver_error(error, 2);
+	}
+
+	if ((error=pwm_set_duty(0, pwm_channel1, 0))) {
+	    	print_driver_error(error, 3);
+	}
+	if ((error=pwm_set_duty(0, pwm_channel2, 0))) {
+	    	print_driver_error(error, 4);
+	}
 
 	intSpeed = 0;
 	isRunning = false;
@@ -90,6 +116,7 @@ Drv8833::Drv8833(int intIn1, int intIn2) {
 * @return NA
 */
 void Drv8833::setMotorSpeed(int intIn) {
+	driver_error_t *error;
 	if ((intIn >= -100) && (intIn <= 100)) {
 		intSpeed = intIn;
 	}
@@ -97,16 +124,26 @@ void Drv8833::setMotorSpeed(int intIn) {
 	/*The following is to change the speed if the motor is already running*/
 	if (isRunning) {
 	    if (intSpeed < 0) {
-        	//analogWrite(pin1, abs(intSpeed));
-		    //digitalWrite(pin2, LOW);
-            gpio_pin_clr(pin2);
-            pwm_set_duty(0, pwm_channel1, intSpeed/100);
+		//analogWrite(pin1, abs(intSpeed));
+		//digitalWrite(pin2, LOW);
+		//gpio_pin_clr(pin2);
+		if ((error=pwm_set_duty(0, pwm_channel2, 0))) {
+		    	print_driver_error(error, 11);
+		}
+		if ((error=pwm_set_duty(0, pwm_channel1, intSpeed/100.0))) {
+		    	print_driver_error(error, 12);
+		}
 	    }
 	    else if (intSpeed > 0) {
-		    //digitalWrite(pin1, LOW);
-		    //analogWrite(pin2, intSpeed);
-            gpio_pin_clr(pin1);
-            pwm_set_duty(0, pwm_channel2, intSpeed/100);
+		//digitalWrite(pin1, LOW);
+		//analogWrite(pin2, intSpeed);
+		//gpio_pin_clr(pin1);
+		if ((error=pwm_set_duty(0, pwm_channel1, 0))) {
+		    	print_driver_error(error, 21);
+		}
+		if ((error=pwm_set_duty(0, pwm_channel2, intSpeed/100.0))) {
+		    	print_driver_error(error, 22);
+		}
 	    }
 	}
 }
@@ -135,12 +172,18 @@ bool Drv8833::isMotorRunning() {
 * @return NA
 */
 void Drv8833::stopMotor() {
+	driver_error_t *error;
 	//digitalWrite(pin1, LOW);
 	//digitalWrite(pin2, LOW);
-    pwm_stop(0, pwm_channel1);
-    pwm_stop(0, pwm_channel2);
-    gpio_pin_clr(pin1);
-    gpio_pin_clr(pin2);
+	if ((error=pwm_stop(0, pwm_channel1))) {
+	    	print_driver_error(error, 31);
+	}
+	if ((error=pwm_stop(0, pwm_channel2))) {
+	    	print_driver_error(error, 32);
+	}
+
+	gpio_pin_clr(pin1);
+	gpio_pin_clr(pin2);
 
 	isRunning = false;
 }
@@ -151,8 +194,16 @@ void Drv8833::stopMotor() {
 * @return NA
 */
 void Drv8833::startMotor() {
-    pwm_start(0, pwm_channel1);
-    pwm_start(0, pwm_channel2);
+	driver_error_t *error;
+
+	if ((error=pwm_start(0, pwm_channel1))) {
+	    	print_driver_error(error, 41);
+	}
+	if ((error=pwm_start(0, pwm_channel2))) {
+	    	print_driver_error(error, 42);
+	}
+
+	isRunning = true;
 }
 
 
