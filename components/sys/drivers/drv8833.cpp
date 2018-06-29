@@ -130,7 +130,7 @@ void Drv8833::setMotorSpeed(int intIn) {
 		if ((error=pwm_set_duty(0, pwm_channel2, 0))) {
 		    	print_driver_error(error, 11);
 		}
-		if ((error=pwm_set_duty(0, pwm_channel1, intSpeed/100.0))) {
+		if ((error=pwm_set_duty(0, pwm_channel1, -intSpeed/100.0))) {
 		    	print_driver_error(error, 12);
 		}
 	    }
@@ -139,12 +139,22 @@ void Drv8833::setMotorSpeed(int intIn) {
 		//analogWrite(pin2, intSpeed);
 		//gpio_pin_clr(pin1);
 		if ((error=pwm_set_duty(0, pwm_channel1, 0))) {
-		    	print_driver_error(error, 21);
+		    	print_driver_error(error, 13);
 		}
 		if ((error=pwm_set_duty(0, pwm_channel2, intSpeed/100.0))) {
-		    	print_driver_error(error, 22);
+		    	print_driver_error(error, 14);
 		}
+	    } else {
+		// freewheeling
+		if ((error=pwm_set_duty(0, pwm_channel1, 0))) {
+		    	print_driver_error(error, 15);
+		}
+		if ((error=pwm_set_duty(0, pwm_channel2, 0))) {
+		    	print_driver_error(error, 16);
+		}
+		
 	    }
+
 	}
 }
 
