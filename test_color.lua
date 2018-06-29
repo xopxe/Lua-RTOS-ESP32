@@ -23,6 +23,12 @@ dump_color_change = function(c, s, v)
   print('color', c, 'sv', s, v)
 end
 
+
+--power on led
+local led_pin = pio.GPIO32
+pio.pin.setdir(pio.OUTPUT, led_pin)
+pio.pin.sethigh(led_pin)
+
 -- enable raw color monitoring, enable hsv mode
 --color.get_continuous(ms, dump_rgb, true)
 
@@ -42,3 +48,6 @@ tmr.sleepms(60*1000)
 -- stop monitoring distances
 color.get_continuous(false)
 color.get_change(false)
+
+pio.pin.setlow(led_pin)
+

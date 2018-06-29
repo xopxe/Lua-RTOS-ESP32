@@ -88,7 +88,7 @@ static void callback_sw_get_rgb(TimerHandle_t xTimer) {
             lua_pushinteger(TL, hsv.s);
             lua_pushinteger(TL, hsv.v);
 
-            int color_i = find_color_in_range(hsv.v);
+            int color_i = find_color_in_range(hsv.h);
             lua_pushstring(TL, color_ranges[color_i].name);
 
             status = lua_pcall(TL, 8, 0, 0);
@@ -152,7 +152,7 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
             return;
         }
 
-        int color_i = find_color_in_range(hsv.v);
+        int color_i = find_color_in_range(hsv.h);
 
         if (color_i!=current_color_i) {
             current_color_i = color_i;
