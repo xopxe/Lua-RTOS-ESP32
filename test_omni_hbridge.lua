@@ -2,7 +2,7 @@ m=require('omni_hbridge')
 
 
 -- initialize with tobot radius and drivers' pins
-m.init(5.0, 27,26, 33,25, 5,15)
+m.init(5.0, 27,26, 33,25, 2,15)
 
 m.set_enable()
 
