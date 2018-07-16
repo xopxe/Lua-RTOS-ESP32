@@ -62,6 +62,16 @@ VL53L0X::VL53L0X(void)
   //printf("In: VL53L0X::VL53L0X(void)\r\n");
 }
 
+
+
+VL53L0X::~VL53L0X(void) {
+    driver_error_t *error;
+
+    if ( i2cdevice>0 && (error= i2c_detach(i2cdevice)) ) {
+        i2c_util_print_driver_error(error, -100);
+    }
+}
+
 // Public Methods //////////////////////////////////////////////////////////////
 
 void VL53L0X::setAddress(uint8_t new_addr)

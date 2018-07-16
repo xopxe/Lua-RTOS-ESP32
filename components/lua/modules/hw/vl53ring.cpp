@@ -25,10 +25,6 @@ extern "C"{
 #include <drivers/gpio.h>
 
 #define ADDRESS_DEFAULT 0b0101001
-//#define NSENSORS 6
-//#define XSHUT_PINS {16,17,4,14,12,13}
-//#define REMAPADDRESS {42,43,44,45,46,47}  // {0x2A, 0x2B}
-
 
 TimerHandle_t vl53ring_get_timer;
 int vl53ring_get_callback=LUA_REFNIL;
@@ -168,6 +164,14 @@ static int lvl53ring_init (lua_State *L) {
 	return 1;
 }
 
+static int lvl53ring_release (lua_State *L) {
+    delete sensors;
+    sensors = NULL;
+    lua_pushboolean(L, true);
+	return 1;
+
+}
+
 static int lvl53ring_test (lua_State *L) {
     VL53L0X *vl53l0x = &(sensors[0].vl53l0x);
     uint16_t val;
@@ -260,6 +264,7 @@ static const luaL_Reg vl53ring[] = {
 //	{"attach", lvl53l0x_attach},
 //	{"detach", lvl53l0x_detach},
 	{"init", lvl53ring_init},
+	{"release", lvl53ring_release},
 	{"test", lvl53ring_test},
 	{"set_timeout", lvl53ring_set_timeout},
 	{"set_measurement_timing_budget", lvl53ring_set_measurement_timing_budget},
