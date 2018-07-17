@@ -275,7 +275,7 @@ static int lvl53ring_get (lua_State *L) {
         return 2;
     }
 
-    uint16_t reading = sensors[sensor_number].vl53l0x.readRangeSingleMillimeters();
+    uint16_t reading = sensors[sensor_number-1].vl53l0x.readRangeSingleMillimeters();
 
     lua_pushnumber(L, reading);
 	return 1;
