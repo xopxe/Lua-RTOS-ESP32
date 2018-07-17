@@ -13,13 +13,13 @@ v=require('vl53ring')
 assert(v.init(sensors))
 
 -- faster, less precise measuremente
-v.set_measurement_timing_budget(20000);
+v.set_measurement_timing_budget(5000);
 
 ms = ms or 1000  -- period of distance measurements
 
 -- the callback will be called with all sensor readings
-local dist_callback= function(...)
-  print('dist:', ...)
+local dist_callback= function(d1, d2, d3, d4, d5, d6)
+    print('dist:', d1, d2, d3, d4, d5, d6)
 end
 
 -- start monitoring distances

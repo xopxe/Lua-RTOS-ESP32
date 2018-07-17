@@ -261,6 +261,27 @@ static int lvl53ring_get_continuous (lua_State *L) {
 	return 1;
 }
 
+static int lvl53ring_get (lua_State *L) {
+    if (vl53ring_get_callback!=LUA_REFNIL) {
+        lua_pushnil(L);
+        lua_pushstring(L, "continuos get running");
+        return 2;
+    }
+
+    uint32_t sensor_number = luaL_checkinteger( L, 1 );
+    if (sensor_number < 1 || sensor_number>n_sensors) {
+        lua_pushnil(L);
+        lua_pushstring(L, "invalid sensor_number");
+        return 2;
+    }
+
+    uint16_t reading = sensors[sensor_number].vl53l0x.readRangeSingleMillimeters();
+
+    lua_pushnumber(L, reading);
+	return 1;
+}
+
+
 static const luaL_Reg vl53ring[] = {
 //	{"attach", lvl53l0x_attach},
 //	{"detach", lvl53l0x_detach},
@@ -270,6 +291,7 @@ static const luaL_Reg vl53ring[] = {
 	{"set_timeout", lvl53ring_set_timeout},
 	{"set_measurement_timing_budget", lvl53ring_set_measurement_timing_budget},
 	{"get_continuous", lvl53ring_get_continuous},
+	{"get", lvl53ring_get},
     {NULL, NULL}
 };
 

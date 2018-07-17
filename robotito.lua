@@ -35,7 +35,7 @@ local enabled = false
 local vlring=require('vl53ring')
 assert(vlring.init(sensors))
 -- faster, less precise measuremente
-vlring.set_measurement_timing_budget(20000);
+--vlring.set_measurement_timing_budget(20000);
 
 
 local omni=require('omni_hbridge')
@@ -57,7 +57,7 @@ local dist_callback= function(d1, d2, d3, d4, d5, d6)
   --print('dist:', d1, d2, d3, d4, d5, d6)
   local d={d1, d2, d3, d4, d5, d6}
 
-  --print('dist:', table.unpack(d))
+  print('dist:', d1, d2, d3, d4, d5, d6)
 
 
   for i=1,6 do
@@ -89,7 +89,7 @@ local dist_callback= function(d1, d2, d3, d4, d5, d6)
   local xdot = ( (d[3]+d[2]-d[6]-d[5])*sin60 ) *norm_x
   local ydot = ( (d[3]+d[5]-d[2]-d[6])/2 + d[4]-d[1] ) *norm_y
 
-  print(xdot, ydot, '', 'dist:', table.unpack(d))
+  --print(xdot, ydot, '', 'dist:', table.unpack(d))
   --omni.drive(xdot,ydot,0)
   
 end
@@ -115,7 +115,18 @@ button:callback(button_callback)
 
 print("on")
 omni.set_enable()
-vlring.get_continuous(ms, dist_callback)
+--vlring.get_continuous(ms, dist_callback)
+local readings = {6}
+while true do
+    for i= 1, #sensors do
+        readings[i] = vlring.get(i)
+    end
+    print (table.unpack(d))
+    tmr.sleepms(100*1000)
+end
+
+
+
 
 --[[
 tmr.sleepms(20*1000)
