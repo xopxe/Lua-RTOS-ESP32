@@ -9,7 +9,7 @@ local sensors = {
  {12},
  {13},
 }
-local omni_conf = {5.0, 27,26, 33,25, 2,15}
+local omni_conf = {5.0, 27,26, 33,25, 23,18}
 
 local ledpin = pio.GPIO19
 local n_pins = 24
@@ -35,7 +35,7 @@ local enabled = false
 local vlring=require('vl53ring')
 assert(vlring.init(sensors))
 -- faster, less precise measuremente
---vlring.set_measurement_timing_budget(20000);
+vlring.set_measurement_timing_budget(20000);
 
 
 local omni=require('omni_hbridge')
@@ -45,34 +45,52 @@ button = sensor.attach("PUSH_SWITCH", pio.GPIO0)
 
 
 local sin60 = math.sqrt(3)/2
-local dmin = 100
-local dmax = 250
+local dmin = 50
+local dmax = 400
 local norm_x = 100 / math.sqrt(3)
 local norm_y = 100 / 2
+local d_range = dmax - dmin
+local k_cuad = -1 / d_range^2
 
 local floor = math.floor
+
+local vel_lineal = function(dist)
+
+  local vel = (dmax-dist) / (d_range)
+  return vel
+
+end
+
+local vel_cuadratic = function(dist)
+
+  local vel = k_cuad*(dist - dmin)^2 + 1
+  return vel
+
+end
+
+local vel_from_dist = vel_cuadratic
 
 -- the callback will be called with all sensor readings
 local dist_callback= function(d1, d2, d3, d4, d5, d6)
   --print('dist:', d1, d2, d3, d4, d5, d6)
   local d={d1, d2, d3, d4, d5, d6}
 
-  print('dist:', d1, d2, d3, d4, d5, d6)
+  -- print('dist:', d1, d2, d3, d4, d5, d6)
 
 
   for i=1,6 do
-    if d[i]<dmin or d[i]>dmax then 
+    if d[i]<dmin or d[i]>dmax then
       d[i]=0
-      
+
       for j = 0, 3 do
           neo:setPixel(first_led[i]+j, 0,0,0)
       end
       neo:update()
-      
+
     else
       --d[i]=dmax-d[i]
-      d[i] = (dmax-d[i]) / (dmax-dmin)   -- 0..1
-      
+      d[i] = vel_from_dist(d[i])   -- 0..1
+
       local color = {
         floor(d[i]*colors[i][1]),
         floor(d[i]*colors[i][2]),
@@ -82,16 +100,16 @@ local dist_callback= function(d1, d2, d3, d4, d5, d6)
         neo:setPixel(first_led[i]+j, table.unpack(color))
       end
       neo:update()
-      
+
     end
   end
 
-  local xdot = ( (d[3]+d[2]-d[6]-d[5])*sin60 ) *norm_x
-  local ydot = ( (d[3]+d[5]-d[2]-d[6])/2 + d[4]-d[1] ) *norm_y
+  local xdot = ( (-d[3]-d[2]+d[6]+d[5])*sin60 ) *norm_x
+  local ydot = ( (-d[3]-d[5]+d[2]+d[6])/2 + d[4]-d[1] ) *norm_y
 
-  --print(xdot, ydot, '', 'dist:', table.unpack(d))
-  --omni.drive(xdot,ydot,0)
-  
+  print(xdot, ydot, '', 'dist:', table.unpack(d))
+  omni.drive(xdot,ydot,0)
+
 end
 
 local function button_callback(data)
@@ -115,15 +133,15 @@ button:callback(button_callback)
 
 print("on")
 omni.set_enable()
---vlring.get_continuous(ms, dist_callback)
-local readings = {6}
-while true do
-    for i= 1, #sensors do
-        readings[i] = vlring.get(i)
-    end
-    print (table.unpack(d))
-    tmr.sleepms(100*1000)
-end
+vlring.get_continuous(ms, dist_callback)
+-- local readings = {6}
+-- while true do
+--     for i= 1, #sensors do
+--         readings[i] = vlring.get(i)
+--     end
+--     print (table.unpack(d))
+--     tmr.sleepms(100*1000)
+-- end
 
 
 

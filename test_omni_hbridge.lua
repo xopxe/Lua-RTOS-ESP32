@@ -2,7 +2,7 @@ m=require('omni_hbridge')
 
 
 -- initialize with tobot radius and drivers' pins
-m.init(5.0, 27,26, 33,25, 2,15)
+m.init(5.0, 27,26, 33,25, 23,18)
 
 m.set_enable()
 
@@ -15,11 +15,11 @@ local d=1000
 -- *dot in -90..90  (actually less)
 
 
-for i=1, 10 do  
+for i=1, 10 do
   m.drive(0,70,0)
   tmr.sleepms(d)
   m.drive(0,-70,0)
-  tmr.sleepms(d);   
+  tmr.sleepms(d);
 end
 
 m.set_enable(false)
