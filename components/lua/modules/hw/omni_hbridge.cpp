@@ -4,6 +4,8 @@
 #define NMOTORS 3
 #define MOTOR_PINS {25,26, 27,28, 29,30}
 
+#define MOTORS_BRAKED true
+
 #define OMNI_CTRL_TIMER 50 //ms
 
 /*
@@ -86,13 +88,13 @@ static void callback_sw_func(TimerHandle_t xTimer) {
         if (motors[i].current_v < motors[i].target_v) {
             dirty=true;
             motors[i].current_v+=10;
-            if (motors[i].current_v > motors[i].target_v) 
+            if (motors[i].current_v > motors[i].target_v)
                 motors[i].current_v = motors[i].target_v;
         }
         if (motors[i].current_v > motors[i].target_v) {
             dirty=true;
             motors[i].current_v-=10;
-            if (motors[i].current_v < motors[i].target_v) 
+            if (motors[i].current_v < motors[i].target_v)
                 motors[i].current_v = motors[i].target_v;
         }
         if (dirty) {
@@ -113,13 +115,13 @@ static int omni_init (lua_State *L) {
         int8_t pin2 = luaL_optinteger( L, (2*i)+3, default_pins[2*i+1] );
 
         printf("omni Setting motor %d on pins %d,%d", i, pin1, pin2);
-        motors[i].driver=new Drv8833(pin1, pin2);
+        motors[i].driver=new Drv8833(pin1, pin2, MOTORS_BRAKED);
         printf(" done\r\n");
         motors[i].current_v=0;
         motors[i].target_v=0;
     }
 
-    motor_control_timer = xTimerCreate("omni_hbridge", OMNI_CTRL_TIMER / portTICK_PERIOD_MS, pdTRUE, 
+    motor_control_timer = xTimerCreate("omni_hbridge", OMNI_CTRL_TIMER / portTICK_PERIOD_MS, pdTRUE,
                             (void *)motor_control_timer, callback_sw_func);
     /*xTimerStart(motor_control_timer, 0);*/
 

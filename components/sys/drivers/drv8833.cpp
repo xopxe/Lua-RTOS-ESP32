@@ -62,7 +62,7 @@ static void print_driver_error(driver_error_t *error, int err) {
 * @return a Drv8833 object using pins six and nine
 */
 Drv8833::Drv8833() {
-	Drv8833(6,9);
+	Drv8833(6,9, false);
 }
 
 /**
@@ -74,11 +74,18 @@ Drv8833::Drv8833() {
 *
 * @return a Drv8833 object using the pins specified
 */
-Drv8833::Drv8833(int intIn1, int intIn2) {
+Drv8833::Drv8833(int intIn1, int intIn2, bool inbraked) {
 	driver_error_t *error;
 
 	pin1 = intIn1;
 	pin2 = intIn2;
+	braked = inbraked;
+
+	if (braked) {
+		defaultDuty = 1.0;
+	}else{
+		defaultDuty = 0.0;
+	}
 
 	//pinMode(pin1, OUTPUT);
 	//pinMode(pin2, OUTPUT);
@@ -95,10 +102,10 @@ Drv8833::Drv8833(int intIn1, int intIn2) {
 	    	print_driver_error(error, 2);
 	}
 
-	if ((error=pwm_set_duty(0, pwm_channel1, 0))) {
+	if ((error=pwm_set_duty(0, pwm_channel1, defaultDuty))) {
 	    	print_driver_error(error, 3);
 	}
-	if ((error=pwm_set_duty(0, pwm_channel2, 0))) {
+	if ((error=pwm_set_duty(0, pwm_channel2, defaultDuty))) {
 	    	print_driver_error(error, 4);
 	}
 
@@ -121,45 +128,42 @@ void Drv8833::setMotorSpeed(int intIn) {
 		intSpeed = intIn;
 	}
 
+	double duty1 = defaultDuty;
+	double duty2 = defaultDuty;
+	double speed = intSpeed/100.0;
+
 	/*The following is to change the speed if the motor is already running*/
 	if (isRunning) {
-	    if (intSpeed < 0) {
-		//analogWrite(pin1, abs(intSpeed));
-		//digitalWrite(pin2, LOW);
-		//gpio_pin_clr(pin2);
-		if ((error=pwm_set_duty(0, pwm_channel2, 0))) {
-		    	print_driver_error(error, 11);
+
+		if (braked){
+			if (intSpeed < 0) {
+				duty2 = 1.0 + speed;
+			} else if (intSpeed > 0) {
+				duty1 = 1.0 - speed ;
+			}
+
+		}else{
+
+			if (intSpeed < 0) {
+				duty1 = -speed;
+			} else if (intSpeed > 0) {
+				duty2 = speed ;
+			}
+
 		}
-		if ((error=pwm_set_duty(0, pwm_channel1, -intSpeed/100.0))) {
-		    	print_driver_error(error, 12);
+
+		if ((error=pwm_set_duty(0, pwm_channel1, duty1))) {
+					print_driver_error(error, 15);
 		}
-	    }
-	    else if (intSpeed > 0) {
-		//digitalWrite(pin1, LOW);
-		//analogWrite(pin2, intSpeed);
-		//gpio_pin_clr(pin1);
-		if ((error=pwm_set_duty(0, pwm_channel1, 0))) {
-		    	print_driver_error(error, 13);
+		if ((error=pwm_set_duty(0, pwm_channel2, duty2))) {
+					print_driver_error(error, 16);
 		}
-		if ((error=pwm_set_duty(0, pwm_channel2, intSpeed/100.0))) {
-		    	print_driver_error(error, 14);
-		}
-	    } else {
-		// freewheeling
-		if ((error=pwm_set_duty(0, pwm_channel1, 0))) {
-		    	print_driver_error(error, 15);
-		}
-		if ((error=pwm_set_duty(0, pwm_channel2, 0))) {
-		    	print_driver_error(error, 16);
-		}
-		
-	    }
 
 	}
 }
 
 /**
-* This method returns the value of the current speed for a Drv8833 object. This value cannot be used to authoritatively determine whether or not the motor is running. To authoritatively determine whether or not the motor is running, call isMotorRunning(). 
+* This method returns the value of the current speed for a Drv8833 object. This value cannot be used to authoritatively determine whether or not the motor is running. To authoritatively determine whether or not the motor is running, call isMotorRunning().
 *
 * @return an integer between -100 and 100(inclusive) representing the value of the current speed for the Drv8833 object.
 */
@@ -211,6 +215,13 @@ void Drv8833::startMotor() {
 	}
 	if ((error=pwm_start(0, pwm_channel2))) {
 	    	print_driver_error(error, 42);
+	}
+
+	if ((error=pwm_set_duty(0, pwm_channel1, defaultDuty))) {
+				print_driver_error(error, 43);
+	}
+	if ((error=pwm_set_duty(0, pwm_channel2, defaultDuty))) {
+				print_driver_error(error, 44);
 	}
 
 	isRunning = true;

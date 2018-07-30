@@ -19,13 +19,15 @@ class Drv8833 {
 	int pin1;
 	int pin2;
 	bool isRunning;
-    
+	bool braked;
+	double defaultDuty;
+
     int8_t pwm_channel1;
     int8_t pwm_channel2;
 
 	public:
 	Drv8833();
-	Drv8833(int intIn1, int intIn2);
+	Drv8833(int intIn1, int intIn2, bool braked);
 	void setMotorSpeed(int intIn);
 	int getMotorSpeed();
 	bool isMotorRunning();
