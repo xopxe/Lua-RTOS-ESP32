@@ -230,7 +230,7 @@ static int lvl53ring_get_continuous (lua_State *L) {
         //set sensor mode
         for (int i=0; i<n_sensors; i++) {
             sensors[i].vl53l0x.startContinuous(millis);
-            usleep(millis / n_sensors); // try to desynchronize readings to avoid cross-interference
+            usleep(1000*millis / n_sensors); // try to desynchronize readings to avoid cross-talk
         }
 
         //set timer for callback
