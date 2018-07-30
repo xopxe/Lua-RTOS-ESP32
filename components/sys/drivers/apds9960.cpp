@@ -86,7 +86,6 @@ bool SparkFun_APDS9960::init()
     if( !wireReadDataByte(APDS9960_ID, id) ) {
         return false;
     }
-    printf("In: SparkFun_APDS9960: a byte read is ok\r\n");
 
     if( !(id == APDS9960_ID_1 || id == APDS9960_ID_2) ) {
         return false;
