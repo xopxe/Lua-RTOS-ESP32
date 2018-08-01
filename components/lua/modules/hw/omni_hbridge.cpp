@@ -3,10 +3,11 @@
 
 #define NMOTORS 3
 #define MOTOR_PINS {25,26, 27,28, 29,30}
+#define MOTOR_ENC  {39,37, 38,36, 34,35}
 
 #define MOTORS_BRAKED true
 
-#define OMNI_CTRL_TIMER 50 //ms
+#define OMNI_CTRL_TIMER 0.05 // s
 
 /*
 #define SERVO_CW_VEL_MIN 1
@@ -42,11 +43,26 @@ extern "C"{
 #include <drivers/drv8833.h>
 #include "vector_math.h"
 
+#include "error.h"
+#include <drivers/encoder.h>
+
 typedef struct {
 	Drv8833 *driver;
+
+    encoder_h_t *encoder;
+    int32_t counter;
+
     float target_v;
-    float current_v;
+    float accum_error;
+    float prev_error;
+    float output;
+    
 } servo_t;
+
+float Kp = 0.0;
+float Ki = 0.0;
+float Kd = 0.0;
+float KF = 1.0;
 
 TimerHandle_t motor_control_timer;
 
@@ -83,6 +99,49 @@ int static pulse_from_angle(float a) {
 
 static void callback_sw_func(TimerHandle_t xTimer) {
 //FIXME implementar PID
+
+
+    for (int i=0; i<NMOTORS; i++) {
+    //for (int i=2; i<NMOTORS; i++) {
+        servo_t *m = &(motors[i]);
+
+        //compute v (m/s)
+        float current_v = m->counter / OMNI_CTRL_TIMER;  // tics/s
+        //printf("motor %i, tics: %i, current_v: %f\n", i, m->counter, current_v);
+        m->counter = 0;
+
+        float error = m->target_v - current_v;
+
+        m->accum_error += error;
+        if (m->accum_error > 100.0) {
+            m->accum_error = 100.0;
+        } else if (m->accum_error < -100.0) {
+            m->accum_error = -100.0;
+        }
+
+        m->output = KF * m->target_v;
+        m->output += Kp * error;
+        m->output += Ki * m->accum_error;
+        m->output += Kd * (error - m->prev_error);
+
+        if (m->output>100.0) m->output=100.0;
+        else if (m->output<-100.0) m->output=-100.0;
+
+        m->prev_error = error;
+
+        printf("motor %i, target_v %f, current_v %f, output %f\n",
+            i, m->target_v, current_v, m->output);
+
+        m->driver->setMotorSpeed(m->output);
+    }
+
+/*
+    for (int i=0; i<NMOTORS; i++) {
+        motors[i].driver->setMotorSpeed(motors[i].output);
+    }
+*/
+
+/*
     for (int i=0; i<NMOTORS; i++) {
         bool dirty = false;
         if (motors[i].current_v < motors[i].target_v) {
@@ -101,27 +160,49 @@ static void callback_sw_func(TimerHandle_t xTimer) {
             motors[i].driver->setMotorSpeed(motors[i].current_v);
         }
     }
+*/
+}
 
+static void callback_enc_func(int i_encoder, int8_t dir, uint32_t counter, uint8_t button) {
+    //printf("motor %i, dir %i, counter %i\n", i_encoder, dir, counter);
+    motors[i_encoder].counter+=dir;
 }
 
 
+
 static int omni_init (lua_State *L) {
+	driver_error_t *error;
     int8_t default_pins[] = MOTOR_PINS;
+    int8_t default_enc[] = MOTOR_ENC;
 
     robot_r = luaL_checknumber(L, 1);
 
     for (int i=0; i<NMOTORS; i++) {
-        int8_t pin1 = luaL_optinteger( L, (2*i)+2, default_pins[2*i] );
-        int8_t pin2 = luaL_optinteger( L, (2*i)+3, default_pins[2*i+1] );
+        int8_t pin1 = luaL_optinteger( L, (4*i)+2, default_pins[2*i] );
+        int8_t pin2 = luaL_optinteger( L, (4*i)+3, default_pins[2*i+1] );
+        int8_t encA = luaL_optinteger( L, (4*i)+4, default_enc[2*i] );
+        int8_t encB = luaL_optinteger( L, (4*i)+5, default_enc[2*i+1] );
 
-        printf("omni Setting motor %d on pins %d,%d", i, pin1, pin2);
+        printf("omni Setting motor %d pins:%d,%d enc:%d,%d", i, pin1, pin2, encA, encB);
+
+        //driver
         motors[i].driver=new Drv8833(pin1, pin2, MOTORS_BRAKED);
+
+        //encoder
+        encoder_h_t *encoder;
+        if ((error = encoder_setup(encA, encB, -1, &encoder))) {
+        	return luaL_driver_error(L, error);
+        }
+        if ((error = encoder_register_callback(encoder, callback_enc_func, i, 1))) {
+        	return luaL_driver_error(L, error);
+        }
+        motors[i].encoder=encoder;
+
         printf(" done\r\n");
-        motors[i].current_v=0;
         motors[i].target_v=0;
     }
 
-    motor_control_timer = xTimerCreate("omni_hbridge", OMNI_CTRL_TIMER / portTICK_PERIOD_MS, pdTRUE,
+    motor_control_timer = xTimerCreate("omni_hbridge", 1000*OMNI_CTRL_TIMER / portTICK_PERIOD_MS, pdTRUE,
                             (void *)motor_control_timer, callback_sw_func);
     /*xTimerStart(motor_control_timer, 0);*/
 
@@ -136,13 +217,11 @@ static int omni_set_enable (lua_State *L) {
     if (enable) {
         xTimerStart(motor_control_timer, 0);
         for (int i=0; i<NMOTORS; i++) {
-            motors[i].current_v=0;
             motors[i].driver->startMotor();
         }
     } else {
         xTimerStop(motor_control_timer, 0);
         for (int i=0; i<NMOTORS; i++) {
-            motors[i].current_v=0;
             motors[i].driver->stopMotor();
         }
     }
@@ -152,12 +231,42 @@ static int omni_set_enable (lua_State *L) {
 }
 
 
+static int omni_set_raw (lua_State *L) {
+    bool success = true;
+    bool enable = lua_gettop(L)==0 || lua_toboolean( L, 1 );
+
+    if (enable) {
+        xTimerStop(motor_control_timer, 0);
+        for (int i=0; i<NMOTORS; i++) {
+            motors[i].driver->startMotor();
+        }
+    } else {
+        for (int i=0; i<NMOTORS; i++) {
+            motors[i].driver->stopMotor();
+        }
+    }
+
+    lua_pushboolean(L, success);
+	return 1;
+}
+
+
+
 static int omni_raw_write (lua_State *L) {
     for (int i=0; i<NMOTORS; i++) {
         double value = luaL_optnumber( L, i+1, 0 );
         motors[i].driver->setMotorSpeed(value);
     }
 
+    lua_pushboolean(L, true);
+	return 1;
+}
+
+static int omni_set_pid (lua_State *L) {
+    Kp = luaL_optnumber( L, 1, 1.0 );
+    Ki = luaL_optnumber( L, 2, 0.0 );
+    Kd = luaL_optnumber( L, 3, 0.0 );
+    KF = luaL_optnumber( L, 4, 1.0 );
     lua_pushboolean(L, true);
 	return 1;
 }
@@ -189,6 +298,8 @@ static const luaL_Reg omni_hbridge[] = {
 	{"raw_write", omni_raw_write},
 	{"drive", omni_drive},
 	{"set_enable", omni_set_enable},
+	{"set_raw", omni_set_raw},
+	{"set_pid", omni_set_pid},
     {NULL, NULL}
 };
 
