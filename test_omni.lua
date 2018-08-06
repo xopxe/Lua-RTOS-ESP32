@@ -22,7 +22,7 @@ tmr.sleepms(2*d);
 --]]
 
 ---[[
-local v = 500
+local v = 0.05   --m/s
 
 --[[
 for i=1, 5 do

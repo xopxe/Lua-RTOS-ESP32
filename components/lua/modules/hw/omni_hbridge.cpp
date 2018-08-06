@@ -9,6 +9,7 @@
 
 #define OMNI_CTRL_TIMER 0.05 // s
 
+
 /*
 #define SERVO_CW_VEL_MIN 1
 #define SERVO_CW_DTY_MIN 1400
@@ -56,13 +57,15 @@ typedef struct {
     float accum_error;
     float prev_error;
     float output;
-    
+
 } servo_t;
 
 float Kp = 0.0;
 float Ki = 0.0;
 float Kd = 0.0;
 float KF = 1.0;
+
+float Max_output = 100.0;
 
 TimerHandle_t motor_control_timer;
 
@@ -113,10 +116,10 @@ static void callback_sw_func(TimerHandle_t xTimer) {
         float error = m->target_v - current_v;
 
         m->accum_error += error;
-        if (m->accum_error > 100.0) {
-            m->accum_error = 100.0;
-        } else if (m->accum_error < -100.0) {
-            m->accum_error = -100.0;
+        if (m->accum_error > Max_output) {
+            m->accum_error = Max_output;
+        } else if (m->accum_error < -Max_output) {
+            m->accum_error = -Max_output;
         }
 
         m->output = KF * m->target_v;
@@ -124,22 +127,22 @@ static void callback_sw_func(TimerHandle_t xTimer) {
         m->output += Ki * m->accum_error;
         m->output += Kd * (error - m->prev_error);
 
-        if (m->output>100.0) m->output=100.0;
-        else if (m->output<-100.0) m->output=-100.0;
+        if (m->output>Max_output) m->output=Max_output;
+        else if (m->output<-Max_output) m->output=-Max_output;
 
         m->prev_error = error;
 
-        printf("motor %i, target_v %f, current_v %f, output %f\n",
-            i, m->target_v, current_v, m->output);
+        // printf("motor %i, target_v %f, current_v %f, output %f\n",
+        //     i, m->target_v, current_v, m->output);
 
-        m->driver->setMotorSpeed(m->output);
+        // m->driver->setMotorSpeed(m->output);
     }
 
-/*
+
     for (int i=0; i<NMOTORS; i++) {
         motors[i].driver->setMotorSpeed(motors[i].output);
     }
-*/
+
 
 /*
     for (int i=0; i<NMOTORS; i++) {
@@ -271,6 +274,12 @@ static int omni_set_pid (lua_State *L) {
 	return 1;
 }
 
+static int omni_set_max_output (lua_State *L) {
+    Max_output = luaL_optnumber( L, 1, 100.0 );
+    lua_pushboolean(L, true);
+	return 1;
+}
+
 static int omni_drive (lua_State *L) {
     float x_dot = luaL_checknumber( L, 1 );
     float y_dot = luaL_checknumber( L, 2 );
@@ -300,6 +309,7 @@ static const luaL_Reg omni_hbridge[] = {
 	{"set_enable", omni_set_enable},
 	{"set_raw", omni_set_raw},
 	{"set_pid", omni_set_pid},
+  {"set_max_output", omni_set_max_output},
     {NULL, NULL}
 };
 
