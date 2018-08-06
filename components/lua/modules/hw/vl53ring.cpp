@@ -77,6 +77,8 @@ static int lvl53ring_init (lua_State *L) {
 
     lua_len(L,1);
     n_sensors = luaL_checkinteger( L, -1 );
+    lua_pop(L,1);
+
     printf("n_sensors=%i\r\n", n_sensors);
 
     sensors = new sensor_t [n_sensors];
@@ -86,7 +88,7 @@ static int lvl53ring_init (lua_State *L) {
     for (int i=1; i<=n_sensors; i++) {
         lua_rawgeti(L,1, i); // entry at stack top
         {
-            if (lua_type(L,1)!=LUA_TTABLE) {
+            if (lua_type(L,-1)!=LUA_TTABLE) {
                 lua_pushnil(L);
                 lua_pushstring(L, "bad entry in parameter, must be table");
             	return 2;
@@ -104,7 +106,7 @@ static int lvl53ring_init (lua_State *L) {
             printf("xshut=%i newaddr=%i\r\n", xshut, newaddr);
             sensors[i-1].xshut_pin = xshut;
             remapaddress[i-1] = newaddr;
-            
+
         }
         lua_pop(L, 1); // pop entry
     }
@@ -211,6 +213,55 @@ static int lvl53ring_set_measurement_timing_budget (lua_State *L) {
 	return 1;
 }
 
+static int lvl53ring_set_measurement_timing_budget_sensor (lua_State *L) {
+    uint16_t i = luaL_checkinteger( L, 1 );
+    uint16_t us = luaL_checkinteger( L, 2 );
+
+    sensors[i].vl53l0x.setMeasurementTimingBudget(us);
+
+    lua_pushboolean(L, true);
+	return 1;
+}
+
+static int lvl53ring_get_measurement_timing_budget_sensor (lua_State *L) {
+    uint16_t i = luaL_checkinteger( L, 1 );
+
+    uint32_t budget = sensors[i].vl53l0x.getMeasurementTimingBudget();
+
+    lua_pushinteger(L, budget);
+	return 1;
+}
+
+static int lvl53ring_set_signal_rate_limit (lua_State *L) {
+    float rate = luaL_checknumber( L, 1 );
+
+    for (int i=0; i<n_sensors; i++) {
+        sensors[i].vl53l0x.setSignalRateLimit(rate);
+    }
+
+    lua_pushboolean(L, true);
+	return 1;
+}
+
+static int lvl53ring_set_signal_rate_limit_sensor (lua_State *L) {
+    uint16_t i = luaL_checkinteger( L, 1 );
+    uint16_t rate = luaL_checknumber( L, 2 );
+
+    sensors[i].vl53l0x.setSignalRateLimit(rate);
+
+    lua_pushboolean(L, true);
+	return 1;
+}
+
+static int lvl53ring_get_signal_rate_limit_sensor (lua_State *L) {
+    uint16_t i = luaL_checkinteger( L, 1 );
+
+    float rate = sensors[i].vl53l0x.getSignalRateLimit();
+
+    lua_pushnumber(L, rate);
+	return 1;
+}
+
 static int lvl53ring_get_continuous (lua_State *L) {
     bool enable = lua_toboolean(L, 1);
     if (enable) {
@@ -290,6 +341,11 @@ static const luaL_Reg vl53ring[] = {
 	{"test", lvl53ring_test},
 	{"set_timeout", lvl53ring_set_timeout},
 	{"set_measurement_timing_budget", lvl53ring_set_measurement_timing_budget},
+  {"set_measurement_timing_budget_sensor", lvl53ring_set_measurement_timing_budget_sensor},
+  {"get_measurement_timing_budget_sensor", lvl53ring_get_measurement_timing_budget_sensor},
+  {"set_signal_rate_limit", lvl53ring_set_signal_rate_limit},
+  {"set_signal_rate_limit_sensor", lvl53ring_set_signal_rate_limit_sensor},
+  {"get_signal_rate_limit_sensor", lvl53ring_get_signal_rate_limit_sensor},
 	{"get_continuous", lvl53ring_get_continuous},
 	{"get", lvl53ring_get},
     {NULL, NULL}
