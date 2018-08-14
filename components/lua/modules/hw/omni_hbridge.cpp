@@ -65,6 +65,10 @@ float Ki = 0.0;
 float Kd = 0.0;
 float KF = 1.0;
 
+float Rad_per_tick = 0.0;
+float Wheel_diameter = 0.0;
+float m_per_sec_to_tics_per_sec = 1.0;
+
 float Max_output = 100.0;
 
 TimerHandle_t motor_control_timer;
@@ -103,7 +107,6 @@ int static pulse_from_angle(float a) {
 static void callback_sw_func(TimerHandle_t xTimer) {
 //FIXME implementar PID
 
-
     for (int i=0; i<NMOTORS; i++) {
     //for (int i=2; i<NMOTORS; i++) {
         servo_t *m = &(motors[i]);
@@ -132,8 +135,7 @@ static void callback_sw_func(TimerHandle_t xTimer) {
 
         m->prev_error = error;
 
-        // printf("motor %i, target_v %f, current_v %f, output %f\n",
-        //     i, m->target_v, current_v, m->output);
+        //printf("motor %i, target_v %f, current_v %f, output %f, error %f \n",i, m->target_v, current_v, m->output, error);
 
         // m->driver->setMotorSpeed(m->output);
     }
@@ -142,8 +144,6 @@ static void callback_sw_func(TimerHandle_t xTimer) {
     for (int i=0; i<NMOTORS; i++) {
         motors[i].driver->setMotorSpeed(motors[i].output);
     }
-
-
 /*
     for (int i=0; i<NMOTORS; i++) {
         bool dirty = false;
@@ -274,6 +274,20 @@ static int omni_set_pid (lua_State *L) {
 	return 1;
 }
 
+static int omni_set_rad_per_tick (lua_State *L) {
+    Rad_per_tick = luaL_optnumber( L, 1, 1.0 );
+    m_per_sec_to_tics_per_sec = 1/(Rad_per_tick * Wheel_diameter);
+    lua_pushboolean(L, true);
+	return 1;
+}
+
+static int omni_set_wheel_diameter (lua_State *L) {
+    Wheel_diameter = luaL_optnumber( L, 2, 0.038);
+    m_per_sec_to_tics_per_sec = 1/(Rad_per_tick * Wheel_diameter);
+    lua_pushboolean(L, true);
+	return 1;
+}
+
 static int omni_set_max_output (lua_State *L) {
     Max_output = luaL_optnumber( L, 1, 100.0 );
     lua_pushboolean(L, true);
@@ -286,14 +300,16 @@ static int omni_drive (lua_State *L) {
     float w_dot = luaL_checknumber( L, 3 );
     float phi = luaL_optnumber( L, 4, 0.0 );
 
-	SF3dVector w = getW(x_dot, y_dot, w_dot, phi);
+	  SF3dVector w = getW(x_dot, y_dot, w_dot, phi);
     //printf("omni computed vel %f %f %f\r\n", w.x, w.y, w.z);
 
-    //printf("omni setting duty %d %d %d\r\n", px, py, pw);
 
-    motors[0].target_v = w.x;
-    motors[1].target_v = w.y;
-    motors[2].target_v = w.z;
+
+    motors[0].target_v = w.x * m_per_sec_to_tics_per_sec;
+    motors[1].target_v = w.y * m_per_sec_to_tics_per_sec;
+    motors[2].target_v = w.z * m_per_sec_to_tics_per_sec;
+
+
 
     lua_pushboolean(L, true);
 	return 1;
@@ -310,6 +326,9 @@ static const luaL_Reg omni_hbridge[] = {
 	{"set_raw", omni_set_raw},
 	{"set_pid", omni_set_pid},
   {"set_max_output", omni_set_max_output},
+  {"set_set_rad_per_tick", omni_set_rad_per_tick},
+  {"set_set_wheel_diameter", omni_set_wheel_diameter},
+
     {NULL, NULL}
 };
 
