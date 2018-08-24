@@ -7,6 +7,7 @@
 
 #define MOTORS_BRAKED true
 
+#define OMNI_NRO_TIMER CPU_TIMER3
 #define OMNI_CTRL_TIMER 0.05 // s
 
 
@@ -32,6 +33,7 @@ extern "C"{
 
 #include <drivers/cpu.h>
 #include "freertos/timers.h"
+#include <drivers/timer.h>
 
 #ifdef __cplusplus
   #include "lua.hpp"
@@ -104,7 +106,7 @@ int static pulse_from_angle(float a) {
 }
 */
 
-static void callback_sw_func(TimerHandle_t xTimer) {
+static void motor_control_callback(TimerHandle_t xTimer) {
 //FIXME implementar PID
 
     for (int i=0; i<NMOTORS; i++) {
@@ -205,25 +207,35 @@ static int omni_init (lua_State *L) {
         motors[i].target_v=0;
     }
 
-    motor_control_timer = xTimerCreate("omni_hbridge", 1000*OMNI_CTRL_TIMER / portTICK_PERIOD_MS, pdTRUE,
-                            (void *)motor_control_timer, callback_sw_func);
+    // motor_control_timer = xTimerCreate("omni_hbridge", 1000*OMNI_CTRL_TIMER / portTICK_PERIOD_MS, pdTRUE,
+    //                         (void *)motor_control_timer, callback_sw_func);
     /*xTimerStart(motor_control_timer, 0);*/
+    if ((error = tmr_setup(OMNI_NRO_TIMER, 1000*OMNI_CTRL_TIMER, motor_control_callback, 1))) {
+        return luaL_driver_error(L, error);
+    }
 
     lua_pushboolean(L, true);
 	return 1;
 }
 
 static int omni_set_enable (lua_State *L) {
+    driver_error_t *error;
     bool success = true;
     bool enable = lua_gettop(L)==0 || lua_toboolean( L, 1 );
 
     if (enable) {
-        xTimerStart(motor_control_timer, 0);
+        // xTimerStart(motor_control_timer, 0);
+        if ((error = tmr_start(OMNI_NRO_TIMER))) {
+            return luaL_driver_error(L, error);
+        }
         for (int i=0; i<NMOTORS; i++) {
             motors[i].driver->startMotor();
         }
     } else {
-        xTimerStop(motor_control_timer, 0);
+        // xTimerStop(motor_control_timer, 0);
+        if ((error = tmr_stop(OMNI_NRO_TIMER))) {
+            return luaL_driver_error(L, error);
+        }
         for (int i=0; i<NMOTORS; i++) {
             motors[i].driver->stopMotor();
         }
@@ -301,7 +313,7 @@ static int omni_drive (lua_State *L) {
     float phi = luaL_optnumber( L, 4, 0.0 );
 
 	  SF3dVector w = getW(x_dot, y_dot, w_dot, phi);
-    //printf("omni computed vel %f %f %f\r\n", w.x, w.y, w.z);
+    printf("omni computed vel %f %f %f\r\n", w.x, w.y, w.z);
 
 
 
