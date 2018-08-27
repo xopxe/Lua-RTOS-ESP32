@@ -7,9 +7,8 @@
 
 #define MOTORS_BRAKED true
 
-#define OMNI_NRO_TIMER CPU_TIMER3
+#define OMNI_NRO_TIMER CPU_TIMER0
 #define OMNI_CTRL_TIMER 0.05 // s
-
 
 /*
 #define SERVO_CW_VEL_MIN 1
@@ -210,10 +209,9 @@ static int omni_init (lua_State *L) {
     // motor_control_timer = xTimerCreate("omni_hbridge", 1000*OMNI_CTRL_TIMER / portTICK_PERIOD_MS, pdTRUE,
     //                         (void *)motor_control_timer, callback_sw_func);
     /*xTimerStart(motor_control_timer, 0);*/
-    if ((error = tmr_setup(OMNI_NRO_TIMER, 1000*OMNI_CTRL_TIMER, motor_control_callback, 1))) {
+    if ((error = tmr_setup(OMNI_NRO_TIMER, 1000*1000*OMNI_CTRL_TIMER, motor_control_callback, 1))) {
         return luaL_driver_error(L, error);
     }
-
     lua_pushboolean(L, true);
 	return 1;
 }
@@ -244,7 +242,6 @@ static int omni_set_enable (lua_State *L) {
     lua_pushboolean(L, success);
 	return 1;
 }
-
 
 static int omni_set_raw (lua_State *L) {
     bool success = true;
@@ -313,7 +310,7 @@ static int omni_drive (lua_State *L) {
     float phi = luaL_optnumber( L, 4, 0.0 );
 
 	  SF3dVector w = getW(x_dot, y_dot, w_dot, phi);
-    printf("omni computed vel %f %f %f\r\n", w.x, w.y, w.z);
+    //printf("omni computed vel %f %f %f\r\n", w.x, w.y, w.z);
 
 
 
