@@ -72,7 +72,7 @@ static int find_color_in_range(int h, int s, int v) {
 }
 
 static void callback_sw_get_rgb(TimerHandle_t xTimer) {
-  printf("ENTER callback_sw_get_rgb \n");
+  //printf("ENTER callback_sw_get_rgb \n");
 
 	lua_State *TL;
 	lua_State *L;
@@ -220,7 +220,7 @@ static int apds9960_set_sv_limits (lua_State *L) {
 }
 
 static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
-  printf("ENTER callback_sw_get_colorchange \n");
+  //printf("ENTER callback_sw_get_colorchange \n");
 	lua_State *TL;
 	lua_State *L;
 	int tref;
