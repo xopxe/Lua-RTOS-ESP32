@@ -490,6 +490,7 @@ static const LUA_REG_TYPE syslib[] =
   { LSTRKEY( "partitions"),   LFUNCVAL( os_partitions ) },
   { LSTRKEY( "passwd"),       LFUNCVAL( os_passwd ) },
   { LSTRKEY( "uptime"),       LFUNCVAL( os_uptime ) },
+  { LSTRKEY( "gettime"),       LFUNCVAL( os_gettime ) },
 #if CONFIG_LUA_RTOS_USE_HARDWARE_LOCKS
   { LSTRKEY( "locks" ),       LFUNCVAL( os_locks ) },
 #endif
