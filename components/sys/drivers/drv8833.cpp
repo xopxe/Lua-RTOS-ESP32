@@ -32,6 +32,8 @@ Notes:				None
 
 //modified by xxopxe@gmail.com
 
+#define FRECUENCY 20
+
 #include "sdkconfig.h"
 #if CONFIG_LUA_RTOS_LUA_USE_DRV8833
 
@@ -95,10 +97,10 @@ Drv8833::Drv8833(int intIn1, int intIn2, bool inbraked) {
 	gpio_pin_clr(pin2);
 
 
-	if ((error=pwm_setup(0, -1, pin1, 1000, 0, &pwm_channel1))) {
+	if ((error=pwm_setup(0, -1, pin1, 1000 * FRECUENCY, 0, &pwm_channel1))) {
 	    	print_driver_error(error, 1);
 	}
-	if ((error=pwm_setup(0, -1, pin2, 1000, 0, &pwm_channel2))) {
+	if ((error=pwm_setup(0, -1, pin2, 1000 * FRECUENCY, 0, &pwm_channel2))) {
 	    	print_driver_error(error, 2);
 	}
 
