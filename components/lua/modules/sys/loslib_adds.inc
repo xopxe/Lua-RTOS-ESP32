@@ -1126,7 +1126,7 @@ static int os_gettime(lua_State *L) {
     struct tms tms;
 
     times(&tms);
-    float uptime = tms.tms_stime / 1000.0;
+    lua_Number uptime = tms.tms_stime / 1000.0;
 
     lua_pushnumber(L, uptime);
     return 1;
