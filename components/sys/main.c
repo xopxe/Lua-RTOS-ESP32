@@ -79,13 +79,6 @@ void *lua_start(void *arg) {
 }
 
 void app_main() {
-
-    //xop
-    gpio_pin_output(GPIO15);
-    gpio_pin_clr(GPIO15);
-    gpio_pin_output(GPIO2);
-    gpio_pin_clr(GPIO2);
-
 	_sys_init();
 
 	#if (CONFIG_LUA_RTOS_LED_ACT >= 0)
