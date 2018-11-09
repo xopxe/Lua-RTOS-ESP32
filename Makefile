@@ -3,19 +3,12 @@
 # project subdirectory.
 #
 
-COMPONENT_ADD_FS ?=
-COMPONENT_FS ?=
-
 EXTRA_COMPONENT_DIRS := $(abspath $(dir $(firstword $(MAKEFILE_LIST))))/components/lua/modules
-
-EXTRA_COMPONENTS := $(dir $(foreach cd,$(EXTRA_COMPONENT_DIRS),                           \
-					$(wildcard $(cd)/*/component.mk) $(wildcard $(cd)/component.mk) \
-				))
-EXTRA_COMPONENTS := $(sort $(foreach comp,$(EXTRA_COMPONENTS),$(lastword $(subst /, ,$(comp)))))
-EXTRA_COMPONENT_PATHS := $(foreach comp,$(EXTRA_COMPONENTS),$(firstword $(foreach cd,$(EXTRA_COMPONENT_DIRS),$(wildcard $(dir $(cd))$(comp) $(cd)/$(comp)))))
 
 BOARD_TYPE_REQUIRED := 1
 VERSION_CHECK_REQUIRED := 1
+BOARD_USB_VID_PID :=
+BOARD_USB_EXP :=
 
 ifneq (,$(findstring clean,$(MAKECMDGOALS)))
   BOARD_TYPE_REQUIRED := 0
@@ -33,6 +26,8 @@ endif
 ifneq ("$(SDKCONFIG_DEFAULTS)","")
   BOARDN := $(shell python boards/boards.py $(SDKCONFIG_DEFAULTS) number)
   TMP := $(shell echo $(BOARDN) > .board)
+  BOARD_USB_VID_PID := $(shell python boards/boards.py $(BOARDN) usb_vid_pid)
+  BOARD_USB_EXP := $(shell python boards/boards.py $(BOARDN) usb_port_exp)
 
   BOARD_TYPE_REQUIRED := 0
   override SDKCONFIG_DEFAULTS := boards/$(SDKCONFIG_DEFAULTS)
@@ -58,7 +53,7 @@ define n
 endef
 
 # Use this esp-idf commit in build
-CURRENT_IDF := 4b91c82cc447640e5b61407e810f1d6f3eabd233
+CURRENT_IDF := 3276a1316f66a923ee2e75b9bd5c7f1006d160f5
 
 # Project name
 PROJECT_NAME := lua_rtos
@@ -77,13 +72,10 @@ export OS = Windows_NT
 endif
 endif
 
-# Default filesystem
-SPIFFS_IMAGE := default
-
 # Lua RTOS has support for a lot of ESP32-based boards, but each board
 # can have different configurations, such as the PIN MAP.
 #
-# This part ensures that the first time that Lua RTOS is build the user specifies
+# This part ensures that the first time that Lua RTOS is build, the user specifies
 # the board type with "make SDKCONFIG_DEFAULTS=board defconfig" or entering
 # the board type through a keyboard option
 ifeq ($(BOARD_TYPE_REQUIRED),1)
@@ -109,6 +101,7 @@ ifeq ($(BOARD_TYPE_REQUIRED),1)
     endif
 
     BOARD := $(subst \,$(n),$(shell python boards/boards.py $(BOARDN)))
+    
     # Check if board exists
     ifneq ("$(shell test -e boards/$(BOARD) && echo ex)","ex")
       $(error "Invalid board type boards/$(BOARD)")
@@ -116,15 +109,78 @@ ifeq ($(BOARD_TYPE_REQUIRED),1)
       override SDKCONFIG_DEFAULTS := boards/$(BOARD)
       MAKECMDGOALS += defconfig
     endif      
-    SPIFFS_IMAGE := $(shell python boards/boards.py $(BOARDN) filesystem)
     TMP := $(shell echo $(BOARDN) > .board)
+    BOARD_USB_VID_PID := $(shell python boards/boards.py $(BOARDN) usb_vid_pid)    
+    BOARD_USB_EXP := $(shell python boards/boards.py $(BOARDN) usb_port_exp)
   else
     ifneq ("$(SDKCONFIG_DEFAULTS)","")
       override SDKCONFIG_DEFAULTS := boards/$(SDKCONFIG_DEFAULTS)
     endif
     BOARDN := $(shell cat .board)
-    SPIFFS_IMAGE := $(shell python boards/boards.py $(BOARDN) filesystem)
+    BOARD_USB_VID_PID := $(shell python boards/boards.py $(BOARDN) usb_vid_pid)
+    BOARD_USB_EXP := $(shell python boards/boards.py $(BOARDN) usb_port_exp)
   endif  
+endif
+
+# Although each board configuration has set the ESPTOOLPY_PORT variable in KConfig,
+# the serial port name can vary for each build platform. This part, tries to find
+# the serial port in which the board is connected inspecting the available serial
+# ports, and matching the USB VID:PID, defined in the boards.json file with the 
+# USB VID:PID expected for the board.
+ifneq ("foo$(BOARD_USB_VID_PID)","foo")
+  $(info Finding a serial port with USB VID:PID $(BOARD_USB_VID_PID) ...)
+  # Get all the available serial ports that corresponds to the board USB VID:PID
+  SERIAL_PORTS := $(shell python -m serial.tools.list_ports "$(BOARD_USB_VID_PID)" -q)
+  ifneq ("foo$(SERIAL_PORTS)","foo")
+    SERIAL_PORTS_FINDED := 0
+    SERIAL_PORT := 
+    ifneq ("foo$(BOARD_USB_EXP)","foo")
+      # Some boards, like ESP-WROVER-KIT mount dual USB2UART adapters, so we need to inspect
+      # the serial port device name to find the port. For example, ESP-WROVER-KIT exposes
+      # two serial ports: /dev/.....A (JTAG), and /dev/.....B (UART). To inspect the
+      # serial port device name, we use a regular expression defined in boards.json.
+      
+      # Count how many serial port device names match with the regular expression   
+      $(foreach USB_PORT,$(SERIAL_PORTS), \
+        $(if $(filter 1, $(shell python boards/test.py $(BOARD_USB_EXP) $(USB_PORT))), $(eval SERIAL_PORTS_FINDED=$(shell echo $$(($(SERIAL_PORTS_FINDED)+1))))) \
+      )
+      
+      ifeq ("foo$(SERIAL_PORTS_FINDED)","foo1")
+        # Only one serial port matches, so use this port
+        $(foreach USB_PORT,$(SERIAL_PORTS), \
+          $(if $(filter 1, $(shell python boards/test.py $(BOARD_USB_EXP) $(USB_PORT))), $(eval SERIAL_PORT=$(shell echo $(USB_PORT)))) \
+        )
+        $(info Finded $(SERIAL_PORT))
+        ESPPORT ?= $(SERIAL_PORT)
+      else
+        # There are more that 1 matching, maybe 2 boards are connected, so use the defined in the board configuration  
+        $(info 0 or more than 1 board attached, using the serial port defined in ESPTOOLPY_PORT)
+      endif
+    else
+      # There is no need to inspect the serial port device name
+      
+      # Count how many serial port device names match with the regular expression
+      $(foreach USB_PORT,$(SERIAL_PORTS), \
+        $(eval SERIAL_PORTS_FINDED=$(shell echo $$(($(SERIAL_PORTS_FINDED)+1)))) \
+      )
+      
+      ifeq ("foo$(SERIAL_PORTS_FINDED)","foo1")
+        # Only one serial port matches, so use this port
+        $(foreach USB_PORT,$(SERIAL_PORTS), \
+          $(eval SERIAL_PORT=$(shell echo $(USB_PORT))) \
+        )
+        $(info Finded $(SERIAL_PORT))
+        ESPPORT ?= $(SERIAL_PORT)
+      else
+        # There are more that 1 matching, maybe 2 boards are connected, so use the defined in the board configuration  
+        $(info 0 or more than 1 board attached, using the serial port defined in ESPTOOLPY_PORT)
+      endif
+    endif
+  else
+    # No USB VID:PID defined in boards.json, so use the defined in the
+    # board configuration
+    $(info No serial ports defined in boards.json, using the serial port defined in ESPTOOLPY_PORT)
+  endif
 endif
 
 ifeq ("$(VERSION_CHECK_REQUIRED)","1")
@@ -177,6 +233,13 @@ endif
 
 include $(IDF_PATH)/make/project.mk
 
+ifneq ("foo$(PYTHON)", "foo")
+	include $(PROJECT_PATH)/make/part.mk
+	include $(PROJECT_PATH)/make/fs.mk
+endif
+
+clean: clean-adds restore-idf
+
 ifdef TOOLCHAIN_COMMIT_DESC
     ifneq ($(TOOLCHAIN_COMMIT_DESC), $(SUPPORTED_TOOLCHAIN_COMMIT_DESC))
         $(info Toolchain version is not supported: $(TOOLCHAIN_COMMIT_DESC))
@@ -191,88 +254,6 @@ ifdef TOOLCHAIN_COMMIT_DESC
         $(error Aborting)
     endif
 endif # TOOLCHAIN_COMMIT_DESC
-
-ifeq ($(BOARD_TYPE_REQUIRED),1)
-  #
-  # This part generates the esptool arguments required for erase the otadata region. This is required in case that
-  # an OTA firmware is build, so we want to update the factory partition when making "make flash".  
-  #
-  ifeq ("$(shell test -e $(PROJECT_PATH)/build/partitions.bin && echo ex)","ex")
-    $(shell $(IDF_PATH)/components/partition_table/gen_esp32part.py --verify $(PROJECT_PATH)/$(PARTITION_TABLE_CSV_NAME) $(PROJECT_PATH)/build/partitions.bin)
-
-    comma := ,
-
-    ifeq ("$(PARTITION_TABLE_CSV_NAME)","partitions-ota.csv")
-      OTA_PARTITION_INFO := $(shell $(IDF_PATH)/components/partition_table/gen_esp32part.py --quiet $(PROJECT_PATH)/build/partitions.bin | grep "otadata")
-
-      OTA_PARTITION_ADDR        := $(word 4, $(subst $(comma), , $(OTA_PARTITION_INFO)))
-      OTA_PARTITION_SIZE_INFO   := $(word 5, $(subst $(comma), , $(OTA_PARTITION_INFO)))
-      OTA_PARTITION_SIZE_UNITS  := $(word 1, $(subst M, M, $(subst K, K, $(word 5, $(subst $(comma), , $(OTA_PARTITION_INFO))))))
-      OTA_PARTITION_SIZE_UNIT   := $(word 2, $(subst M, M, $(subst K, K, $(word 5, $(subst $(comma), , $(OTA_PARTITION_INFO))))))
-
-      OTA_PARTITION_SIZE_FACTOR := 1
-      ifeq ($(OTA_PARTITION_SIZE_UNIT),K)
-        OTA_PARTITION_SIZE_FACTOR := 1024
-      endif
-
-      ifeq ($(OTA_PARTITION_SIZE_UNIT),M)
-        OTA_PARTITION_SIZE_FACTOR := 1048576
-      endif
-
-      OTA_PARTITION_SIZE := $(shell expr $(OTA_PARTITION_SIZE_UNITS) \* $(OTA_PARTITION_SIZE_FACTOR))
-
-      ESPTOOL_ERASE_OTA_ARGS := $(ESPTOOLPY) --chip esp32 --port $(ESPPORT) --baud $(ESPBAUD) erase_region $(OTA_PARTITION_ADDR) $(OTA_PARTITION_SIZE)
-    else
-      ESPTOOL_ERASE_OTA_ARGS :=
-    endif
- endif
- 
-  #
-  # This part gets the information for the spiffs partition 
-  #
-  ifeq ("$(shell test -e $(PROJECT_PATH)/build/partitions.bin && echo ex)","ex")
-    SPIFFS_PARTITION_INFO := $(shell $(IDF_PATH)/components/partition_table/gen_esp32part.py --quiet $(PROJECT_PATH)/build/partitions.bin | grep "spiffs")
-
-    SPIFFS_BASE_ADDR   := $(word 4, $(subst $(comma), , $(SPIFFS_PARTITION_INFO)))
-    SPIFFS_SIZE_INFO   := $(word 5, $(subst $(comma), , $(SPIFFS_PARTITION_INFO)))
-    SPIFFS_SIZE_UNITS  := $(word 1, $(subst M, M, $(subst K, K, $(word 5, $(subst $(comma), , $(SPIFFS_PARTITION_INFO))))))
-    SPIFFS_SIZE_UNIT   := $(word 2, $(subst M, M, $(subst K, K, $(word 5, $(subst $(comma), , $(SPIFFS_PARTITION_INFO))))))
-
-    SPIFFS_SIZE_FACTOR := 1
-    ifeq ($(SPIFFS_SIZE_UNIT),K)
-      SPIFFS_SIZE_FACTOR := 1024
-    endif
-
-    ifeq ($(SPIFFS_SIZE_UNIT),M)
-      SPIFFS_SIZE_FACTOR := 1048576
-    endif
-
-    ifeq ("foo$(SPIFFS_SIZE_UNIT)", "foo")
-      SPIFFS_SIZE_UNITS := 512
-      SPIFFS_SIZE_FACTOR := 1024
-    endif
-
-	SPIFFS_SIZE := $(shell expr $(SPIFFS_SIZE_UNITS) \* $(SPIFFS_SIZE_FACTOR))
-  endif
-endif
-
-#
-# Make rules
-#
-clean: restore-idf
-
-flash: erase-ota-data
-
-erase-ota-data: 
-	$(ESPTOOL_ERASE_OTA_ARGS)
-	
-configure-idf-lua-rtos-tests:
-	@echo "Configure esp-idf for Lua RTOS tests ..."
-	@touch $(PROJECT_PATH)/components/sys/sys/sys_init.c
-	@touch $(PROJECT_PATH)/components/sys/Lua/src/lbaselib.c
-ifneq ("$(shell test -e  $(IDF_PATH)/components/sys && echo ex)","ex")
-	@ln -s $(PROJECT_PATH)/main/test/lua_rtos $(IDF_PATH)/components/sys 2> /dev/null
-endif
 
 upgrade-idf: restore-idf
 	@cd $(IDF_PATH) && git pull
@@ -291,33 +272,13 @@ endif
 	@rm -f sdkconfig.defaults || true
 	@rm -f .board || true
 		
-flash-args:
+flash-args: partition_table_get_info blank_ota_data
 	@echo $(subst --port $(ESPPORT),, \
 			$(subst python /components/esptool_py/esptool/esptool.py,, \
 				$(subst $(IDF_PATH),, $(ESPTOOLPY_WRITE_FLASH))\
 			)\
 	 	  ) \
 	 $(subst /build/, , $(subst /build/bootloader/,, $(subst $(PROJECT_PATH), , $(ESPTOOL_ALL_FLASH_ARGS))))
-
-#
-# This part prepare the file system content into the build/tmp-fs folder. The file system content
-# comes from the SPIFFS_IMAGE variable, that contains the main folder to use, and the COMPONENT_ADD_FS
-# variable, that contains individual folders to add by component
-#
-COMPONENT_FS := 
-
-define includeComponentFS
-ifeq ("$(shell test -e $(1)/component.mk && echo ex)","ex")
-$(eval include $(1)/component.mk)
-COMPONENT_FS += $(addsuffix /*,$(addprefix $(1)/, $(COMPONENT_ADD_FS)))
-endif
-endef
-
-fs-prepare:
-	$(foreach componentpath,$(EXTRA_COMPONENT_PATHS), \
-		$(eval $(call includeComponentFS,$(componentpath))))
-	$(info  $(COMPONENT_FS))
-	@rm -f -r $(PROJECT_PATH)/build/tmp-fs
-	@mkdir -p $(PROJECT_PATH)/build/tmp-fs
-	@cp -f -r $(COMPONENT_FS) $(PROJECT_PATH)/build/tmp-fs
-	@cp -f -r $(PROJECT_PATH)/components/spiffs_image/$(SPIFFS_IMAGE)/* $(PROJECT_PATH)/build/tmp-fs
+	 
+clean-adds:
+	@rm -f -r $(PROJECT_PATH)/build/*

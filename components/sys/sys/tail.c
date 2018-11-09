@@ -39,42 +39,81 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Lua RTOS readdir wrapper
+ * Lua RTOS, file tail utilities
  *
  */
 
-#include "esp_attr.h"
+#include "tail.h"
 
 #include <limits.h>
-#include <reent.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 #include <errno.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
-#include <dirent.h>
+int file_tails(const char *name, int length) {
+    int size = 0;     // File size
+    char c;           // Current character
+    int tail_pos = 0; // File position to tail
+    int res;
 
-#include <sys/mount.h>
-
-DIR* __real_readdir(const char* name);
-
-DIR* __wrap_readdir(const char* name) {
-    char *ppath;
-    DIR *dir;
-
-    if (!name || !*name) {
-        errno = ENOENT;
-        return (DIR*)NULL;
+    FILE *fp = fopen(name,"r+");
+    if (!fp) {
+        return -1;
     }
 
-    ppath = mount_resolve_to_physical(name);
-    if (ppath) {
-        dir = __real_readdir(ppath);
+    int wp, rp; // Write / read position
 
-        free(ppath);
+    // Compute the tail position in file
+    int bytes = length;
 
-        return dir;
-    } else {
-        return (DIR*)NULL;
+    fseek(fp, 0, SEEK_SET);
+    while (fread(&c,1,1,fp) == 1) {
+        bytes--;
+        tail_pos++;
+        size++;
+
+        if ((c == '\n') && (bytes <= 0)) {
+            break;
+        }
     }
+
+    int current;
+    char *buffer = calloc(1, tail_pos);
+    if (!buffer) {
+        fclose(fp);
+
+        errno = ENOMEM;
+        return -1;
+    }
+
+    rp = tail_pos;
+    wp = 0;
+
+    while ((current = fread(buffer, 1, length, fp)) == length)  {
+        rp += current;
+        size += current;
+
+        fseek(fp, wp, SEEK_SET);
+        fwrite(buffer, 1, current, fp);
+        wp += current;
+        fseek(fp, rp, SEEK_SET);
+    }
+
+    size += current;
+
+    fseek(fp, wp, SEEK_SET);
+    fwrite(buffer, 1, current, fp);
+
+    if ((res = ftruncate(fileno(fp), size - tail_pos)) < 0) {
+        free(buffer);
+        return -1;
+    }
+
+    fclose(fp);
+
+    free(buffer);
+
+    return 0;
 }

@@ -86,7 +86,7 @@ typedef union {
     uint16_t ipwords[2];
 } net_ip;
 
-static lua_callback_t *callback;
+static lua_callback_t *callback = NULL;
 
 static void callback_func(system_event_t *event) {
     uint8_t for_us = 0; // The event is for us?
@@ -143,7 +143,7 @@ static void callback_func(system_event_t *event) {
             break;
     }
 
-    if (for_us) {
+    if (for_us != 0 && callback != NULL) {
         lua_State *state = luaS_callback_state(callback);
 
         lua_createtable(state, 0, 0);
@@ -191,9 +191,10 @@ static int lnet_lookup(lua_State* L) {
 
 static int lnet_packip(lua_State *L) {
     net_ip ip;
-    unsigned i, temp;
+    unsigned i;
 
-    if (lua_isnumber(L, 1))
+    if (lua_isnumber(L, 1)) {
+        unsigned temp;
         for (i = 0; i < 4; i++) {
             temp = luaL_checkinteger(L, i + 1);
             if ((int)temp < 0 || temp > 255)
@@ -201,9 +202,11 @@ static int lnet_packip(lua_State *L) {
 
             ip.ipbytes[i] = temp;
         }
+    }
     else {
         const char* pip = luaL_checkstring(L, 1);
-        unsigned len, temp[4];
+        unsigned temp[4];
+        signed len;
 
         if (sscanf(pip, "%u.%u.%u.%u%n", temp, temp + 1, temp + 2, temp + 3,
                 &len) != 4 || len != strlen(pip))
@@ -352,6 +355,11 @@ static int lnet_ota(lua_State *L) {
 
 static int lnet_callback(lua_State *L) {
     driver_error_t *error;
+
+    if (callback != NULL) {
+        luaS_callback_destroy(callback);
+        callback = NULL;
+    }
 
     callback = luaS_callback_create(L, 1);
     if (callback == NULL) {

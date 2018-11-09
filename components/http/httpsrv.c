@@ -97,30 +97,32 @@ static int socket_server_normal = 0;
 static int socket_server_secure = 0;
 
 typedef struct {
-  int port;
-  int *server; //socket
-  const int secure;
-  char *certificate;
-  char *private_key;
+	int port;
+	int *server; //socket
+	const int secure;
+	char *certificate;
+	char *private_key;
 } http_server_config;
 
 #define HTTP_Normal_initializer { CONFIG_LUA_RTOS_HTTP_SERVER_PORT, &socket_server_normal, 0, NULL, NULL }
 #define HTTP_Secure_initializer { CONFIG_LUA_RTOS_HTTP_SERVER_PORT_SSL, &socket_server_secure, 1, NULL, NULL } //cert and privkey need to be supplied from lua
 
 typedef struct {
-  http_server_config *config;
-  int socket;
-  SSL *ssl;
-  int headers_sent;
-  struct sockaddr_storage *client;
-  socklen_t client_len;
-  char *path;
-  char *method;
-  char *data;
+	http_server_config *config;
+	int socket;
+	SSL *ssl;
+	int headers_sent;
+	struct sockaddr_storage *client;
+	socklen_t client_len;
+	char *path;
+	char *method;
+	char *data;
+	char *chunk_buffer;
+	char *printf_buffer;
 } http_request_handle;
 
-#define HTTP_Request_Normal_initializer { config, client, NULL, 0, NULL, 0, NULL, NULL, NULL };
-#define HTTP_Request_Secure_initializer { config, client, ssl,  0, NULL, 0, NULL, NULL, NULL };
+#define HTTP_Request_Normal_initializer { config, client, NULL, 0, NULL, 0, NULL, NULL, NULL, NULL, NULL };
+#define HTTP_Request_Secure_initializer { config, client, ssl,  0, NULL, 0, NULL, NULL, NULL, NULL, NULL };
 
 static http_server_config http_normal = HTTP_Normal_initializer;
 static http_server_config http_secure = HTTP_Secure_initializer;
@@ -160,25 +162,40 @@ static int request_write(http_request_handle *request, char *buffer, int length)
 	return (request->config->secure) ? SSL_write(request->ssl, buffer, length) : send(request->socket, buffer, length, MSG_DONTWAIT);
 }
 
+#define BUFFER_SIZE_INITIAL 256
+#define BUFFER_SIZE_MAX 2048
 static int do_printf(http_request_handle *request, const char *fmt, ...) {
 	int ret = 0;
-	char *buffer;
 	va_list args;
 
-	buffer = (char *)malloc(2048);
-	if (buffer) {
-		*buffer = '\0';
+	if (request->printf_buffer == NULL)
+		request->printf_buffer = (char *)malloc(BUFFER_SIZE_INITIAL);
 
+	if (request->printf_buffer) {
+		*(request->printf_buffer) = '\0';
 		va_start(args, fmt);
-		vsnprintf(buffer, 2048, fmt, args);
-
-		int length = strlen(buffer);
-		if(length) { //don't try to transfer "nothing"
-			ret = request_write(request, buffer, length);
+		int length = vsnprintf(request->printf_buffer, BUFFER_SIZE_INITIAL, fmt, args);
+		va_end(args);
+		if (length>=0 && length<BUFFER_SIZE_INITIAL) {
+			if(length) { //don't try to transfer "nothing"
+				ret = request_write(request, request->printf_buffer, length);
+			}
+		}
+		else {
+			// retry with a bigger buffer...
+			char *buffer = (char *)malloc(BUFFER_SIZE_MAX);
+			if (buffer) {
+				*buffer = '\0';
+				va_start(args, fmt);
+				length = vsnprintf(buffer, BUFFER_SIZE_MAX, fmt, args);
+				va_end(args);
+				if(length) { //don't try to transfer "nothing"
+					ret = request_write(request, buffer, length);
+				}
+				free(buffer);
+			}
 		}
 
-		va_end(args);
-		free(buffer);
 	}
 	return ret;
 }
@@ -303,26 +320,40 @@ void send_error(http_request_handle *request, int status, char *title, char *ext
 	do_printf(request, HTTP_ERROR_LINE_4);
 }
 
+#define CHUNK_SIZE_INITIAL (BUFFER_SIZE_INITIAL-2)
+#define CHUNK_SIZE_MAX  (BUFFER_SIZE_MAX-2)
 static void chunk(http_request_handle *request, const char *fmt, ...) {
-	char *buffer;
 	va_list args;
 
-	buffer = (char *)malloc(2048);
-	if (buffer) {
-		*buffer = '\0';
+	if (request->chunk_buffer == NULL)
+		request->chunk_buffer = (char *)malloc(CHUNK_SIZE_INITIAL);
 
+	if (request->chunk_buffer) {
+		*(request->chunk_buffer) = '\0';
 		va_start(args, fmt);
-
-		vsnprintf(buffer, 2048, fmt, args);
-
-		int length = strlen(buffer);
-		if(length) { //a length of zero would end our whole transfer
-			do_printf(request, "%x\r\n", length);
-			do_printf(request, "%s\r\n", buffer);
-		}
-
+		int length = vsnprintf(request->chunk_buffer, CHUNK_SIZE_INITIAL, fmt, args);
 		va_end(args);
-		free(buffer);
+		if (length>=0 && length<CHUNK_SIZE_INITIAL) {
+			if(length) { //a length of zero would end our whole transfer
+				do_printf(request, "%x\r\n", length);
+				do_printf(request, "%s\r\n", request->chunk_buffer);
+			}
+		}
+		else {
+			// retry with a bigger buffer...
+			char *buffer = (char *)malloc(CHUNK_SIZE_MAX);
+			if (buffer) {
+				*buffer = '\0';
+				va_start(args, fmt);
+				length = vsnprintf(buffer, CHUNK_SIZE_MAX, fmt, args);
+				va_end(args);
+				if(length) { //a length of zero would end our whole transfer
+					do_printf(request, "%x\r\n", length);
+					do_printf(request, "%s\r\n", buffer);
+				}
+				free(buffer);
+			}
+		}
 	}
 }
 
@@ -410,28 +441,29 @@ void send_file(http_request_handle *request, char *path, struct stat *statbuf) {
 			time_t src_mtime = statbuf->st_mtime;
 
 			// Get .luap file modified time
-            if (stat(ppath, statbuf) == 0) {
-                if (src_mtime > statbuf->st_mtime)  {
-                    http_preprocess_lua_page(path,ppath);
-                }
-            } else {
-                http_preprocess_lua_page(path,ppath);
-            }
+			if (stat(ppath, statbuf) == 0) {
+				if (src_mtime > statbuf->st_mtime) {
+					http_preprocess_lua_page(path,ppath);
+				}
+			} else {
+				http_preprocess_lua_page(path,ppath);
+			}
 
 			if (S_ISDIR(statbuf->st_mode)) {
 				send_error(request, 500, "Internal Server Error", NULL, "Folder found where a precompiled file is expected.");
 			}
 			else {
-				lua_State *L = pvGetLuaState();  /* get state */
-				if (L == NULL) {
-					send_error(request, 500, "Internal Server Error", NULL, "Cannot get state.");
+				lua_State *L = pvGetLuaState(); /* get state */
+				lua_State* TL = L ? lua_newthread(L) : NULL;
+				if (L == NULL || TL == NULL) {
+					send_error(request, 500, "Internal Server Error", NULL, L ? "Cannot create thread.":"Cannot get state.");
 				}
 				else {
-					if (luaL_loadfile(L, ppath)) {
+					if (luaL_loadfile(TL, ppath)) {
 						char* error = (char *)malloc(2048);
 						if (error) {
 							*error = '\0';
-							snprintf(error, 2048, "FATAL ERROR: %s", lua_tostring(L, -1));
+							snprintf(error, 2048, "FATAL ERROR: %s", lua_tostring(TL, -1));
 							send_error(request, 500, "Internal Server Error", NULL, error);
 							free(error);
 						}
@@ -464,45 +496,45 @@ void send_file(http_request_handle *request, char *path, struct stat *statbuf) {
 							}
 						}
 
-						lua_pushstring(L, (strcasecmp(request->method, "GET") == 0) ? "GET":"POST");
-						lua_setglobal(L, "http_method");
-						lua_pushstring(L, request->path);
-						lua_setglobal(L, "http_uri");
-						lua_pushstring(L, (request->data && *request->data) ? request->data:"");
-						lua_setglobal(L, "http_request");
-						lua_pushinteger(L, request->config->port);
-						lua_setglobal(L, "http_port");
-						lua_pushinteger(L, request->config->secure);
-						lua_setglobal(L, "http_secure");
-						lua_pushstring(L, buffer ? buffer:"");
-						lua_setglobal(L, "http_remote_addr");
-						lua_pushinteger(L, request->client->ss_family==AF_INET6 ? ((struct sockaddr_in6*)request->client)->sin6_port : ((struct sockaddr_in*)request->client)->sin_port);
-						lua_setglobal(L, "http_remote_port");
-						lua_pushstring(L, path);
-						lua_setglobal(L, "http_script_name");
-						lua_pushlightuserdata(L, (void*)request);
-						lua_setglobal(L, "http_internal_handle");
+						lua_pushstring(TL, (strcasecmp(request->method, "GET") == 0) ? "GET":"POST");
+						lua_setglobal(TL, "http_method");
+						lua_pushstring(TL, request->path);
+						lua_setglobal(TL, "http_uri");
+						lua_pushstring(TL, (request->data && *request->data) ? request->data:"");
+						lua_setglobal(TL, "http_request");
+						lua_pushinteger(TL, request->config->port);
+						lua_setglobal(TL, "http_port");
+						lua_pushinteger(TL, request->config->secure);
+						lua_setglobal(TL, "http_secure");
+						lua_pushstring(TL, buffer ? buffer:"");
+						lua_setglobal(TL, "http_remote_addr");
+						lua_pushinteger(TL, request->client->ss_family==AF_INET6 ? ((struct sockaddr_in6*)request->client)->sin6_port : ((struct sockaddr_in*)request->client)->sin_port);
+						lua_setglobal(TL, "http_remote_port");
+						lua_pushstring(TL, path);
+						lua_setglobal(TL, "http_script_name");
+						lua_pushlightuserdata(TL, (void*)request);
+						lua_setglobal(TL, "http_internal_handle");
 
-						lua_pcall(L, 0, 0, 0);
+						lua_pcall(TL, 0, 0, 0);
 
-						lua_pushnil(L);
-						lua_setglobal(L, "http_method");
-						lua_pushnil(L);
-						lua_setglobal(L, "http_uri");
-						lua_pushnil(L);
-						lua_setglobal(L, "http_request");
-						lua_pushnil(L);
-						lua_setglobal(L, "http_port");
-						lua_pushnil(L);
-						lua_setglobal(L, "http_secure");
-						lua_pushnil(L);
-						lua_setglobal(L, "http_remote_addr");
-						lua_pushnil(L);
-						lua_setglobal(L, "http_remote_port");
-						lua_pushnil(L);
-						lua_setglobal(L, "http_script_name");
-						lua_pushnil(L);
-						lua_setglobal(L, "http_internal_handle");
+						lua_pushnil(TL);
+						lua_setglobal(TL, "http_method");
+						lua_pushnil(TL);
+						lua_setglobal(TL, "http_uri");
+						lua_pushnil(TL);
+						lua_setglobal(TL, "http_request");
+						lua_pushnil(TL);
+						lua_setglobal(TL, "http_port");
+						lua_pushnil(TL);
+						lua_setglobal(TL, "http_secure");
+						lua_pushnil(TL);
+						lua_setglobal(TL, "http_remote_addr");
+						lua_pushnil(TL);
+						lua_setglobal(TL, "http_remote_port");
+						lua_pushnil(TL);
+						lua_setglobal(TL, "http_script_name");
+						lua_pushnil(TL);
+						lua_setglobal(TL, "http_internal_handle");
 
 						free(buffer);
 
@@ -772,9 +804,9 @@ int process(http_request_handle *request) {
 				//check if the line begins with "Host:"
 				if (host==(char *)pathbuf) {
 					save_ptr = NULL;
-					host = strtok_r(host, ":", &save_ptr);  //Host:
+					host = strtok_r(host, ":", &save_ptr); //Host:
 					host = strtok_r(NULL, "\r", &save_ptr); //the actual host
-					while(*host==' ') host++;  //skip spaces after the :
+					while(*host==' ') host++; //skip any spaces after the colon
 
 					if (0 == strcasecmp(CAPTIVE_SERVER_NAME, host) ||
 							0 == strcasecmp(ip4addr, host)) {
@@ -809,7 +841,7 @@ int process(http_request_handle *request) {
 		int contentlength = HTTP_BUFF_SIZE;
 		//skip headers to the actual request data
 		while (do_gets(pathbuf, HTTP_BUFF_SIZE, request) && strlen(pathbuf)>0 ) {
-			if (pathbuf && strlen(pathbuf)<3) {
+			if (strlen(pathbuf)<3) {
 				skip = pathbuf;
 				while (*skip=='\r' || *skip=='\n') skip++;
 				if (strlen(skip)==0) {
@@ -827,9 +859,9 @@ int process(http_request_handle *request) {
 					//check if the line begins with "Content-Length:"
 					if (contentlen==(char *)pathbuf) {
 						save_ptr = NULL;
-						contentlen = strtok_r(contentlen, ":", &save_ptr);  //Content-Length:
+						contentlen = strtok_r(contentlen, ":", &save_ptr); //Content-Length:
 						contentlen = strtok_r(NULL, "\r", &save_ptr); //the actual content length
-						while(*contentlen==' ') contentlen++;  //skip spaces after the :
+						while(*contentlen==' ') contentlen++; //skip any spaces after the colon
 						contentlength = atoi(contentlen)+1;
 					}
 				}
@@ -918,6 +950,15 @@ int process(http_request_handle *request) {
 	request->path = NULL;
 	request->data = NULL;
 
+	if (request->chunk_buffer) {
+		free(request->chunk_buffer);
+		request->chunk_buffer = NULL;
+	}
+	if (request->printf_buffer) {
+		free(request->printf_buffer);
+		request->printf_buffer = NULL;
+	}
+
 	return 0;
 }
 
@@ -997,7 +1038,7 @@ static void *http_thread(void *arg) {
 		sin.sin6_family = AF_INET6;
 		memcpy(&sin.sin6_addr.un.u32_addr, &in6addr_any, sizeof(in6addr_any));
 		sin.sin6_port   = htons(config->port);
-		int rc = bind(*config->server, (struct sockaddr *) &sin, sizeof (sin));
+		rc = bind(*config->server, (struct sockaddr *) &sin, sizeof (sin));
 		if(0 != rc) {
 			syslog(LOG_ERR, "couldn't bind to port %d\n", config->port);
 			return NULL;
@@ -1034,13 +1075,13 @@ static void *http_thread(void *arg) {
 		if (!SSL_CTX_use_certificate_ASN1(ctx, certificate_bytes, certificate_buf)) {
 			syslog(LOG_ERR, "couldn't set SSL certificate\n");
 			mbedtls_zeroize( certificate_buf, certificate_bytes );
-			mbedtls_free( certificate_buf );
+			//MUST NOT free certificate_buf !!!
 			SSL_CTX_free(ctx);
 			ctx = NULL;
 			return NULL;
 		}
 		mbedtls_zeroize( certificate_buf, certificate_bytes );
-		mbedtls_free( certificate_buf );
+		//MUST NOT free certificate_buf !!!
 
 		//load privkey
 		size_t private_key_bytes;
@@ -1054,13 +1095,13 @@ static void *http_thread(void *arg) {
 		if (!SSL_CTX_use_PrivateKey_ASN1(0, ctx, private_key_buf, private_key_bytes)) {
 			syslog(LOG_ERR, "couldn't load SSL private key\n");
 			mbedtls_zeroize( private_key_buf, private_key_bytes );
-			mbedtls_free( private_key_buf );
+			//MUST NOT free private_key_buf !!!
 			SSL_CTX_free(ctx);
 			ctx = NULL;
 			return NULL;
 		}
 		mbedtls_zeroize( private_key_buf, private_key_bytes );
-		mbedtls_free( private_key_buf );
+		//MUST NOT free private_key_buf !!!
 	}
 
 	syslog(LOG_INFO, "http: server listening on port %d\n", config->port);
@@ -1215,7 +1256,6 @@ int http_start(lua_State* L) {
 
 		// Set CPU
 		cpu_set_t cpu_set = CPU_INITIALIZER;
-
 		CPU_SET(CONFIG_LUA_RTOS_HTTP_SERVER_TASK_CPU, &cpu_set);
 
 		pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpu_set);

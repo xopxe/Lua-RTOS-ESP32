@@ -21,6 +21,7 @@ CFLAGS += -D_CLOCKS_PER_SEC_=configTICK_RATE_HZ # Number of interrupt ticks for 
 
 CFLAGS += -DPATH_MAX=64
 CFLAGS += -DMAXNAMLEN=64
+CFLAGS += -D__FILENAME_MAX__=64
 
 CFLAGS += -DCONFIG_MAX_FD_BITS=4
 
@@ -65,3 +66,6 @@ CFLAGS += -DBUILD_COMMIT=$(LUA_RTOS_BUILD_COMMIT)
 else
 CFLAGS += -DBUILD_COMMIT=\"$(shell git rev-parse HEAD)\"
 endif
+
+# When building app, first make romfs to link with the app
+# $(APP_ELF): | fs-romfs

@@ -50,28 +50,6 @@
 #include "freertos/FreeRTOS.h"
 #include "esp_task.h"
 
-/* VFS */
-/* Calculate how many vfs are needed */
-#ifndef CONFIG_SD_CARD_MMC
-#define CONFIG_SD_CARD_MMC 0
-#endif
-
-#ifndef CONFIG_SD_CARD_SPI
-#define CONFIG_SD_CARD_SPI 0
-#endif
-
-#ifndef CONFIG_LUA_RTOS_USE_SPIFFS
-#define CONFIG_LUA_RTOS_USE_SPIFFS 0
-#endif
-
-#ifndef CONFIG_LUA_RTOS_USE_SPIFFS
-#define CONFIG_LUA_RTOS_USE_SPIFFS 0
-#endif
-
-#ifndef CONFIG_LUA_RTOS_USE_SSH_SERVER
-#define CONFIG_LUA_RTOS_USE_SSH_SERVER 0
-#endif
-
 /* Board type */
 #if CONFIG_LUA_RTOS_BOARD_WHITECAT_N1ESP32
 #define LUA_RTOS_BOARD "N1ESP32"
@@ -89,8 +67,12 @@
 #define LUA_RTOS_BOARD "ESP32COREBOARD"
 #endif
 
+#if CONFIG_LUA_RTOS_BOARD_ESP32_PICO_KIT
+#define LUA_RTOS_BOARD "ESP32-PICO-KIT"
+#endif
+
 #if CONFIG_LUA_RTOS_BOARD_ESP32_WROVER_KIT
-#define LUA_RTOS_BOARD "ESP-WROVER-KIT"
+#define LUA_RTOS_BOARD "ESP32-WROVER-KIT"
 #endif
 
 #if CONFIG_LUA_RTOS_BOARD_ESP32_THING
@@ -111,6 +93,14 @@
 
 #if CONFIG_LUA_RTOS_BOARD_FIPY
 #define LUA_RTOS_BOARD "FIPY"
+#endif
+
+#if CONFIG_LUA_RTOS_BOARD_DOIT_DEVKIT_V1
+#define LUA_RTOS_BOARD "DOIT-ESP32-DEVKIT-V1"
+#endif
+
+#if CONFIG_LUA_RTOS_BOARD_WEMOS_ESP32_OLED
+#define LUA_RTOS_BOARD "WEMOS-ESP32-OLED"
 #endif
 
 #if CONFIG_LUA_RTOS_BOARD_OTHER
@@ -257,6 +247,19 @@
 #if CONFIG_NEWLIB_NANO_FORMAT
 #error "Use 64 bits for integer and real is not compatible with CONFIG_NEWLIB_NANO_FORMAT = 1. Please disable it with make menuconfig, disabling option in Component config -> ESP32-especific -> Enable 'nano' formatting options for printf/scanf family  ."
 #endif
+#endif
+
+// Root file system
+#if CONFIG_LUA_RTOS_RAM_FS_ROOT_FS
+#define CONFIG_LUA_RTOS_ROOT_FS "ramfs"
+#elif CONFIG_LUA_RTOS_SPIFFS_ROOT_FS
+#define CONFIG_LUA_RTOS_ROOT_FS "spiffs"
+#elif CONFIG_LUA_RTOS_LFS_ROOT_FS
+#define CONFIG_LUA_RTOS_ROOT_FS "lfs"
+#elif CONFIG_LUA_RTOS_FAT_ROOT_FS
+#define CONFIG_LUA_RTOS_ROOT_FS "fat"
+#elif CONFIG_LUA_RTOS_ROM_FS_ROOT_FS
+#define CONFIG_LUA_RTOS_ROOT_FS "romfs"
 #endif
 
 #endif
