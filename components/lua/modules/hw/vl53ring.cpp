@@ -278,11 +278,26 @@ static int lvl53ring_get_continuous (lua_State *L) {
             return 2;
 	    }
 
-        //set sensor mode
+        /*set sensor mode
         for (int i=0; i<n_sensors; i++) {
             sensors[i].vl53l0x.startContinuous(millis);
             usleep(1000*millis / n_sensors); // try to desynchronize readings to avoid cross-talk
-        }
+        }*/
+
+        int inter_delay = 1000*millis / n_sensors;
+        sensors[0].vl53l0x.startContinuous(millis);
+        usleep(inter_delay);
+        sensors[3].vl53l0x.startContinuous(millis);
+        usleep(inter_delay);
+        sensors[1].vl53l0x.startContinuous(millis);
+        usleep(inter_delay);
+        sensors[4].vl53l0x.startContinuous(millis);
+        usleep(inter_delay);
+        sensors[2].vl53l0x.startContinuous(millis);
+        usleep(inter_delay);
+        sensors[5].vl53l0x.startContinuous(millis);
+        usleep(inter_delay);
+
 
         //set timer for callback
 	    luaL_checktype(L, 2, LUA_TFUNCTION);
