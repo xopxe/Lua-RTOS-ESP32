@@ -72,8 +72,6 @@ static int find_color_in_range(int h, int s, int v) {
 }
 
 static void callback_sw_get_rgb(TimerHandle_t xTimer) {
-  //printf("ENTER callback_sw_get_rgb \n");
-
 	lua_State *TL;
 	lua_State *L;
 	int tref;
@@ -205,9 +203,7 @@ static int apds9960_set_color_table(lua_State *L){
         }
         lua_pop(L, 1); // pop entry
     }
-    printf("END FUNCTION \n");
     lua_pushboolean(L, true);
-    printf("END lua_pushboolean \n");
     return 1;
 }
 
@@ -220,7 +216,6 @@ static int apds9960_set_sv_limits (lua_State *L) {
 }
 
 static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
-  //printf("ENTER callback_sw_get_colorchange \n");
 	lua_State *TL;
 	lua_State *L;
 	int tref;
@@ -308,7 +303,6 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
 }
 
 static int apds9960_init (lua_State *L) {
-  printf("END apds9960_init \n");
   bool ok = sensor.init();
   if (!ok) {
       lua_pushnil(L);
@@ -320,7 +314,6 @@ static int apds9960_init (lua_State *L) {
 }
 
 static int apds9960_enable_power (lua_State *L) {
-    printf("END apds9960_enable_power \n");
     bool enable = lua_gettop(L)==0 || lua_toboolean( L, 1 );
     bool ok;
     if (enable) {
@@ -339,7 +332,6 @@ static int apds9960_enable_power (lua_State *L) {
 }
 
 static int apds9960_color_enable_sensor (lua_State *L) {
-    printf("END apds9960_color_enable_sensor \n");
     bool enable = lua_gettop(L)==0 || lua_toboolean( L, 1 );
     bool interrupts = lua_toboolean( L, 2 );
     bool ok;
@@ -426,7 +418,6 @@ static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
 
     uint8_t d;
     bool ok = sensor.readProximity(d);
-    printf("HELLO");
 
     int status;
     if (ok) {
