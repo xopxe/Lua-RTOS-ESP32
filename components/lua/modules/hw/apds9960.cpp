@@ -426,7 +426,7 @@ static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
 
     uint8_t d;
     bool ok = sensor.readProximity(d);
-
+    printf("HELLO");
 
     int status;
     if (ok) {
@@ -704,7 +704,9 @@ static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV){
         return;
     }
 
-    if( RGB.r == max )
+    if( delta == 0 )
+      HSV.h = 0;
+    else if( RGB.r == max )
         HSV.h = (RGB.g - RGB.b)*60/delta;        // between yellow & magenta
     else if( RGB.g == max )
         HSV.h = 120 + (RGB.b - RGB.r)*60/delta;    // between cyan & yellow
