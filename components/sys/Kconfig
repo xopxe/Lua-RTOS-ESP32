@@ -1503,6 +1503,11 @@ menu "Lua RTOS"
                help
                  I2C port speed in hertz
 
+            config LUA_RTOS_LUA_USE_WSSERVER
+               bool "Include Websockets server module."
+               default y
+
+
             config LUA_RTOS_LUA_USE_THREAD
                bool "Include thread module in build"
                default y
