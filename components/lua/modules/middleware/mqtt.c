@@ -101,7 +101,8 @@ DRIVER_REGISTER_BEGIN(MQTT,mqtt,0,NULL,NULL);
     DRIVER_REGISTER_ERROR(MQTT, mqtt, NotEnoughMemory, "not enough memory", LUA_MQTT_ERR_NOT_ENOUGH_MEMORY);
 DRIVER_REGISTER_END(MQTT,mqtt,0,NULL,NULL);
 
-static int client_inited = 0;
+// Is the MQTT client initialized?
+static int initialized = 0;
 
 // MQTT subscription callback
 typedef struct {
@@ -115,6 +116,9 @@ typedef struct {
 typedef struct {
     struct mtx mtx;
 
+    TaskHandle_t connTask;
+    TaskHandle_t discTask;
+
     MQTTAsync_connectOptions conn_opts;
 #ifdef OPENSSL
     MQTTAsync_SSLOptions ssl_opts;
@@ -127,12 +131,6 @@ typedef struct {
     int secure;
     int persistence;
 } mqtt_userdata;
-
-// MQTT connection context
-typedef struct {
-    mqtt_userdata *mqtt;
-    TaskHandle_t task;
-} mqtt_conn_ctx_t;
 
 // Emit a Lua exception using the result code (rc) provided by the MQTT library
 static int mqtt_emit_exeption(lua_State* L, int exception, int rc) {
@@ -200,47 +198,61 @@ static int mqtt_emit_exeption(lua_State* L, int exception, int rc) {
 // Connection failure callback, called by the MQTT client when the connection can't
 // be established.
 static void connFailure(void *context, MQTTAsync_failureData *response) {
-    return;
-
-    mqtt_conn_ctx_t *ctx = (mqtt_conn_ctx_t *)context;
+    mqtt_userdata *mqtt = (mqtt_userdata *)context;
 
     if (response) {
-        if (ctx->task) {
-            xTaskNotify(ctx->task, response->code, eSetValueWithOverwrite);
+            // If a task is waiting for the connection, notify the task with the
+            // response code
+        mtx_lock(&mqtt->mtx);
+        if (mqtt->connTask) {
+            xTaskNotify(mqtt->connTask, response->code, eSetValueWithOverwrite);
         }
+        mtx_unlock(&mqtt->mtx);
     }
 }
 
 // Connection success callback, called by he MQTT client when the connection is
 // established to the MQTT broker.
 static void connSuccess(void *context, MQTTAsync_successData *response) {
-    mqtt_conn_ctx_t *ctx = (mqtt_conn_ctx_t *)context;
+    mqtt_userdata *mqtt = (mqtt_userdata *)context;
 
-    if (ctx->task) {
-        xTaskNotify(ctx->task, 0, eSetValueWithOverwrite);
-    }
+	// If a task is waiting for the connection, notify the task with the
+	// response code
+	mtx_lock(&mqtt->mtx);
+	if (mqtt->connTask) {
+		xTaskNotify(mqtt->connTask, 0, eSetValueWithOverwrite);
+	}
+	mtx_unlock(&mqtt->mtx);
 }
 
 // Disconnection failure callback, called by the MQTT client when there is
 // a problem with the disconnection.
 static void discFailure(void *context, MQTTAsync_failureData *response) {
-    mqtt_conn_ctx_t *ctx = (mqtt_conn_ctx_t *)context;
+    mqtt_userdata *mqtt = (mqtt_userdata *)context;
 
     if (response) {
-        if (ctx->task) {
-            xTaskNotify(ctx->task, response->code, eSetValueWithOverwrite);
+        // If a task is waiting for the disconnection, notify the task with the
+        // response code
+        mtx_lock(&mqtt->mtx);
+        if (mqtt->discTask) {
+            xTaskNotify(mqtt->discTask, response->code, eSetValueWithOverwrite);
         }
+        mtx_unlock(&mqtt->mtx);
     }
 }
 
 // Disconnection success callback, called by he MQTT client when the disconnection
 // is done.
 static void discSuccess(void *context, MQTTAsync_successData *response) {
-    mqtt_conn_ctx_t *ctx = (mqtt_conn_ctx_t *)context;
+    mqtt_userdata *mqtt = (mqtt_userdata *)context;
 
-    if (ctx->task) {
-        xTaskNotify(ctx->task, 0, eSetValueWithOverwrite);
-    }
+	// If a task is waiting for the disconnection, notify the task with the
+	// response code
+	mtx_lock(&mqtt->mtx);
+	if (mqtt->discTask) {
+		xTaskNotify(mqtt->discTask, 0, eSetValueWithOverwrite);
+	}
+	mtx_unlock(&mqtt->mtx);
 }
 
 // Extracted from:
@@ -346,7 +358,6 @@ static int add_subs_callback(lua_State *L, int index, mqtt_userdata *mqtt, const
 static int msgArrived(void *context, char * topicName, int topicLen, MQTTAsync_message* m) {
     mqtt_userdata *mqtt = (mqtt_userdata *) context;
     if (mqtt) {
-
         mqtt_subs_callback *callback;
 
         mtx_lock(&mqtt->mtx);
@@ -410,6 +421,8 @@ static int lmqtt_client(lua_State* L) {
 
     // Allocate mqtt structure and initialize
     mqtt_userdata * mqtt = (mqtt_userdata *) lua_newuserdata(L, sizeof(mqtt_userdata));
+    mqtt->connTask = NULL;
+    mqtt->discTask = NULL;
     mqtt->client = NULL;
     mqtt->callbacks = NULL;
     mqtt->secure = secure;
@@ -427,9 +440,9 @@ static int lmqtt_client(lua_State* L) {
     // Calculate uri
     snprintf(url, sizeof(url), "%s://%s:%d", (mqtt->secure?"ssl":"tcp"), host, port);
 
-    if (!client_inited) {
+    if (!initialized) {
         MQTTAsync_init();
-        client_inited = 1;
+        initialized = 1;
     }
 
     //url is being strdup'd in MQTTClient_create
@@ -479,24 +492,28 @@ static int lmqtt_connect(lua_State* L) {
 #endif
 
     // Set connection context
-    mqtt_conn_ctx_t ctx;
-
-    ctx.mqtt = mqtt;
-    ctx.task = xTaskGetCurrentTaskHandle();
+    mqtt->connTask = xTaskGetCurrentTaskHandle();
 
     // Prepare connection
     MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
     conn_opts.connectTimeout = MQTT_CONNECT_TIMEOUT;
     conn_opts.keepAliveInterval = 20;
     conn_opts.cleansession = 0;
-    conn_opts.username = strdup(user); //needs to be strdup'd here for connectionLost usage
-    conn_opts.password = strdup(password); // //needs to be strdup'd here for connectionLost usage
+
+    if (strlen(user) > 0) {
+        conn_opts.username = strdup(user); //needs to be strdup'd here for connectionLost usage
+    }
+
+    if (strlen(password) > 0) {
+        conn_opts.password = strdup(password); // //needs to be strdup'd here for connectionLost usage
+    }
+
     conn_opts.onSuccess = connSuccess;
     conn_opts.onFailure = connFailure;
     conn_opts.automaticReconnect = 1;
     conn_opts.maxRetryInterval = 10;
 
-    conn_opts.context = &ctx;
+    conn_opts.context = mqtt;
 #ifdef OPENSSL
     conn_opts.ssl = &mqtt->ssl_opts;
 #endif
@@ -532,12 +549,22 @@ static int lmqtt_connect(lua_State* L) {
     bcopy(&conn_opts, &mqtt->conn_opts, sizeof(MQTTAsync_connectOptions));
 
     // Try to connect
+    if (!wait_for_network_init(10)) {
+        mtx_lock(&mqtt->mtx);
+        mqtt->connTask = NULL;
+        mtx_unlock(&mqtt->mtx);
+
+    		return luaL_exception_extended(L, LUA_MQTT_ERR_CANT_CONNECT, "network not started");
+    }
+
     MQTTAsync_connect(mqtt->client, &mqtt->conn_opts);
 
     // Wait for connection
     uint32_t rc_val;
     if (xTaskNotifyWait(ULONG_MAX, ULONG_MAX, &rc_val, MQTT_CONNECT_TIMEOUT / portTICK_PERIOD_MS) == pdTRUE) {
-        ctx.task = NULL;
+        mtx_lock(&mqtt->mtx);
+        mqtt->connTask = NULL;
+        mtx_unlock(&mqtt->mtx);
 
         switch (rc_val) {
             case 1: return luaL_exception_extended(L, LUA_MQTT_ERR_CANT_CONNECT, "connection refused, unacceptable protocol version");
@@ -548,12 +575,16 @@ static int lmqtt_connect(lua_State* L) {
             case 0xffffffff: return luaL_exception_extended(L, LUA_MQTT_ERR_CANT_CONNECT, "network not started");
         }
     } else {
-        ctx.task = NULL;
+        mtx_lock(&mqtt->mtx);
+        mqtt->connTask = NULL;
+        mtx_unlock(&mqtt->mtx);
 
         return luaL_exception_extended(L, LUA_MQTT_ERR_CANT_CONNECT, "timeout");
     }
 
-    ctx.task = NULL;
+    mtx_lock(&mqtt->mtx);
+    mqtt->connTask = NULL;
+    mtx_unlock(&mqtt->mtx);
 
     return 0;
 }
@@ -626,40 +657,52 @@ static int lmqtt_disconnect(lua_State* L) {
     mqtt_userdata *mqtt = (mqtt_userdata *) luaL_checkudata(L, 1, "mqtt.cli");
     luaL_argcheck(L, mqtt, 1, "mqtt expected");
 
-    if (MQTTAsync_isConnected(mqtt->client) != 1) return 0;
+    if (MQTTAsync_isConnected(mqtt->client)) {
+        mtx_lock(&mqtt->mtx);
 
-    // Set connection context
-    mqtt_conn_ctx_t ctx;
+        // Set connection context
+        mqtt->discTask = xTaskGetCurrentTaskHandle();
 
-    ctx.mqtt = mqtt;
-    ctx.task = xTaskGetCurrentTaskHandle();
+        // Prepare disconnection
+        MQTTAsync_disconnectOptions opts = MQTTAsync_disconnectOptions_initializer;
+        opts.onSuccess = discSuccess;
+        opts.onFailure = discFailure;
+        opts.context = mqtt;
 
-    // Prepare disconnection
-    MQTTAsync_disconnectOptions opts = MQTTAsync_disconnectOptions_initializer;
-    opts.onSuccess = discSuccess;
-    opts.onFailure = discFailure;
-    opts.context = &ctx;
-
-    // Try to disconnect
-    mtx_lock(&mqtt->mtx);
-
-    MQTTAsync_disconnect(mqtt->client, &opts);
-
-    // Wait for disconnection
-    uint32_t rc_val;
-    if (xTaskNotifyWait(ULONG_MAX, ULONG_MAX, &rc_val, MQTT_CONNECT_TIMEOUT / portTICK_PERIOD_MS) == pdTRUE) {
-        if (rc_val == 0xffffffff) {
-            mtx_unlock(&mqtt->mtx);
-            return luaL_exception_extended(L, LUA_MQTT_ERR_CANT_DISCONNECT, "network not started");
-        }
-    } else {
         mtx_unlock(&mqtt->mtx);
-        return luaL_exception_extended(L, LUA_MQTT_ERR_CANT_CONNECT, "timeout");
+
+        // Try to disconnect
+        MQTTAsync_disconnect(mqtt->client, &opts);
+
+        // Wait for disconnection
+        uint32_t rc_val;
+
+        if (xTaskNotifyWait(ULONG_MAX, ULONG_MAX, &rc_val, MQTT_CONNECT_TIMEOUT / portTICK_PERIOD_MS) == pdTRUE) {
+            if (rc_val == 0xffffffff) {
+                mtx_lock(&mqtt->mtx);
+                mqtt->discTask = NULL;
+                mtx_unlock(&mqtt->mtx);
+
+                return luaL_exception_extended(L, LUA_MQTT_ERR_CANT_DISCONNECT, "network not started");
+            }
+        } else {
+            mtx_lock(&mqtt->mtx);
+            mqtt->discTask = NULL;
+            mtx_unlock(&mqtt->mtx);
+
+            return luaL_exception_extended(L, LUA_MQTT_ERR_CANT_DISCONNECT, "timeout");
+        }
+
+        mtx_lock(&mqtt->mtx);
+        mqtt->discTask = NULL;
+        mtx_unlock(&mqtt->mtx);
     }
 
     //make sure the subscription callbacks are properly free'd
     mqtt_subs_callback *callback;
     mqtt_subs_callback *nextcallback;
+
+    mtx_lock(&mqtt->mtx);
 
     callback = mqtt->callbacks;
     while (callback) {
@@ -687,6 +730,7 @@ static int lmqtt_disconnect(lua_State* L) {
     }
 
     mtx_unlock(&mqtt->mtx);
+
     return 0;
 }
 
