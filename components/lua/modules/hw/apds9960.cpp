@@ -135,7 +135,7 @@ static void callback_sw_get_rgb(TimerHandle_t xTimer) {
     if (status != LUA_OK) {
 		const char *msg = lua_tostring(TL, -1);
     	//luaL_error(TL, msg);
-		lua_writestringerror("error in color_change callback %s\n", msg);
+		lua_writestringerror("error in color callback %s\n", msg);
 		lua_pop(TL, 1);		
     }
 }
@@ -298,9 +298,9 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
 
     if (status != LUA_OK) {
 		const char *msg = lua_tostring(TL, -1);
-    	//luaL_error(TL, msg);
 		lua_writestringerror("error in color_change callback %s\n", msg);
 		lua_pop(TL, 1);		
+        //luaL_error(TL, msg);
     }
     
     
@@ -460,7 +460,7 @@ static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
     if (status != LUA_OK) {
 		const char *msg = lua_tostring(TL, -1);
     	//luaL_error(TL, msg);
-		lua_writestringerror("error in color_change callback %s\n", msg);
+		lua_writestringerror("error in proximity callback %s\n", msg);
 		lua_pop(TL, 1);		
     }
 }

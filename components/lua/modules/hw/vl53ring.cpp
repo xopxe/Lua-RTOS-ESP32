@@ -63,7 +63,7 @@ static void callback_sw_dist(TimerHandle_t xTimer) {
     if (status != LUA_OK) {
 		const char *msg = lua_tostring(TL, -1);
     	//luaL_error(TL, msg);
-		lua_writestringerror("error in color_change callback %s\n", msg);
+		lua_writestringerror("error in distance callback %s\n", msg);
 		lua_pop(TL, 1);		
     }
 }
