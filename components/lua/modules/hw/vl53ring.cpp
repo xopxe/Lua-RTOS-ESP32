@@ -61,8 +61,10 @@ static void callback_sw_dist(TimerHandle_t xTimer) {
     luaL_unref(TL, LUA_REGISTRYINDEX, tref);
 
     if (status != LUA_OK) {
-    	const char *msg = lua_tostring(TL, -1);
-    	luaL_error(TL, msg);
+		const char *msg = lua_tostring(TL, -1);
+    	//luaL_error(TL, msg);
+		lua_writestringerror("error in color_change callback %s\n", msg);
+		lua_pop(TL, 1);		
     }
 }
 
@@ -351,18 +353,18 @@ static int lvl53ring_get (lua_State *L) {
 static const luaL_Reg vl53ring[] = {
 //	{"attach", lvl53l0x_attach},
 //	{"detach", lvl53l0x_detach},
-	{"init", lvl53ring_init},
-	{"release", lvl53ring_release},
-	{"test", lvl53ring_test},
-	{"set_timeout", lvl53ring_set_timeout},
-	{"set_measurement_timing_budget", lvl53ring_set_measurement_timing_budget},
-  {"set_measurement_timing_budget_sensor", lvl53ring_set_measurement_timing_budget_sensor},
-  {"get_measurement_timing_budget_sensor", lvl53ring_get_measurement_timing_budget_sensor},
-  {"set_signal_rate_limit", lvl53ring_set_signal_rate_limit},
-  {"set_signal_rate_limit_sensor", lvl53ring_set_signal_rate_limit_sensor},
-  {"get_signal_rate_limit_sensor", lvl53ring_get_signal_rate_limit_sensor},
-	{"get_continuous", lvl53ring_get_continuous},
-	{"get", lvl53ring_get},
+    {"init", lvl53ring_init},
+    {"release", lvl53ring_release},
+    {"test", lvl53ring_test},
+    {"set_timeout", lvl53ring_set_timeout},
+    {"set_measurement_timing_budget", lvl53ring_set_measurement_timing_budget},
+    {"set_measurement_timing_budget_sensor", lvl53ring_set_measurement_timing_budget_sensor},
+    {"get_measurement_timing_budget_sensor", lvl53ring_get_measurement_timing_budget_sensor},
+    {"set_signal_rate_limit", lvl53ring_set_signal_rate_limit},
+    {"set_signal_rate_limit_sensor", lvl53ring_set_signal_rate_limit_sensor},
+    {"get_signal_rate_limit_sensor", lvl53ring_get_signal_rate_limit_sensor},
+    {"get_continuous", lvl53ring_get_continuous},
+    {"get", lvl53ring_get},
     {NULL, NULL}
 };
 
