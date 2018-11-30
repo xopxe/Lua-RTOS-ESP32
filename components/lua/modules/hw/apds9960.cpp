@@ -487,7 +487,7 @@ static int apds9960_color_get_continuous (lua_State *L) {
 	    luaL_checktype(L, 2, LUA_TFUNCTION);
         lua_pushvalue(L, 2);
         apds9960_color_get_rgb_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-        apds9960_color_get_rgb_timer = xTimerCreate("apds9960rgb", millis / portTICK_PERIOD_MS, pdTRUE,
+        apds9960_color_get_rgb_timer = xTimerCreate("apds_rgb", millis / portTICK_PERIOD_MS, pdTRUE,
             (void *)apds9960_color_get_rgb_timer, callback_sw_get_rgb);
         xTimerStart(apds9960_color_get_rgb_timer, 0);
     } else {
@@ -541,7 +541,7 @@ static int apds9960_dist_get_dist_thresh (lua_State *L) {
 	    luaL_checktype(L, 4, LUA_TFUNCTION);
       lua_pushvalue(L, 4);
       apds9960_dist_get_dist_thresh_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-      apds9960_dist_get_dist_thresh_timer = xTimerCreate("apds9960dist", millis / portTICK_PERIOD_MS, pdTRUE,
+      apds9960_dist_get_dist_thresh_timer = xTimerCreate("apds_prox", millis / portTICK_PERIOD_MS, pdTRUE,
           (void *)apds9960_dist_get_dist_thresh_timer, callback_dist_get_dist_thresh);
       xTimerStart(apds9960_dist_get_dist_thresh_timer, 0);
     } else {
@@ -645,7 +645,7 @@ static int apds9960_color_get_change (lua_State *L) {
 	    luaL_checktype(L, 2, LUA_TFUNCTION);
         lua_pushvalue(L, 2);
         apds9960_color_get_change_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-        apds9960_color_get_change_timer = xTimerCreate("apds9960colorchange", millis / portTICK_PERIOD_MS, pdTRUE,
+        apds9960_color_get_change_timer = xTimerCreate("apds_color", millis / portTICK_PERIOD_MS, pdTRUE,
             (void *)apds9960_color_get_change_timer, callback_sw_get_colorchange);
         xTimerStart(apds9960_color_get_change_timer, 0);
     } else {
