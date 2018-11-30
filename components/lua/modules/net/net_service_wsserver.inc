@@ -19,6 +19,8 @@
 #define AP_SSID "ESP32 Test"
 #define AP_PSSWD WSSERVER_CONFIG_AP_PSSWD
 
+int ws_callback;
+
 static QueueHandle_t client_queue;
 const static int client_queue_size = 10;
 
@@ -78,6 +80,29 @@ void websocket_callback(uint8_t num,WEBSOCKET_TYPE_t type,char* msg,uint64_t len
       break;
     case WEBSOCKET_TEXT:
       if(len) {
+
+        lua_State *TL;
+        lua_State *L;
+        int tref;
+
+        L = pvGetLuaState();
+        TL = lua_newthread(L);
+
+        tref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+        lua_rawgeti(L, LUA_REGISTRYINDEX, ws_callback);
+        lua_xmove(L, TL, 1);
+        lua_pushlstring(TL, msg, len);
+        int status = lua_pcall(TL, 0, 0, 0);
+        luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+        if (status != LUA_OK) {
+            const char *msg = lua_tostring(TL, -1);
+            luaL_error(TL, msg);
+        }
+
+
+
         switch(msg[0]) {
           case 'L':
             if(sscanf(msg,"L%i",&value)) {
@@ -154,7 +179,7 @@ static void server_task(void* pvParameters) {
   client_queue = xQueueCreate(client_queue_size,sizeof(struct netconn*));
 
   conn = netconn_new(NETCONN_TCP);
-  netconn_bind(conn,NULL,80);
+  netconn_bind(conn,NULL,8080);
   netconn_listen(conn);
   ESP_LOGI(TAG,"server listening");
   do {
@@ -221,8 +246,23 @@ int lstart_server() {
   return 0;
 }
 
+static int lattach( lua_State* L ) {
+    luaL_checktype(L, 1, LUA_TFUNCTION);
+    lua_pushvalue(L, 1);
+    ws_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+    return 1;
+}
+
+static int ldettach (lua_State *L) {
+    luaL_unref(L, LUA_REGISTRYINDEX, ws_callback);
+    return 0;
+}
+
+
 static const LUA_REG_TYPE wsserver_map[] = {
     { LSTRKEY( "start"  ),	 LFUNCVAL( lstart_server    ) },
+    { LSTRKEY( "attach"  ),	 LFUNCVAL( lattach    ) },
+    { LSTRKEY( "detach"  ),	 LFUNCVAL( ldettach    ) },
     //{ LSTRKEY( "print_chunk"  ),	 LFUNCVAL( lhttp_print    ) },
     //{ LSTRKEY( "set_headers"  ),	 LFUNCVAL( lhttp_status    ) },
 	{ LNILKEY, LNILVAL }
