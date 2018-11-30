@@ -133,8 +133,10 @@ static void callback_sw_get_rgb(TimerHandle_t xTimer) {
     luaL_unref(TL, LUA_REGISTRYINDEX, tref);
 
     if (status != LUA_OK) {
-    	const char *msg = lua_tostring(TL, -1);
-    	luaL_error(TL, msg);
+		const char *msg = lua_tostring(TL, -1);
+    	//luaL_error(TL, msg);
+		lua_writestringerror("error in color callback %s\n", msg);
+		lua_pop(TL, 1);		
     }
 }
 
@@ -183,8 +185,6 @@ static int apds9960_set_color_table(lua_State *L){
             	return 2;
             }
             const char * colorName = lua_tolstring(L, -1, &str_len);
-            printf("String %i %s\n", str_len, colorName);
-            //color_ranges[i].name = "xx\0 ";
             color_ranges[i-1].name = new char[str_len+1];
             memcpy(color_ranges[i-1].name, colorName, str_len+1);
             lua_pop(L,1);
@@ -297,9 +297,13 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
     }
 
     if (status != LUA_OK) {
-    	const char *msg = lua_tostring(TL, -1);
-    	luaL_error(TL, msg);
+		const char *msg = lua_tostring(TL, -1);
+		lua_writestringerror("error in color_change callback %s\n", msg);
+		lua_pop(TL, 1);		
+        //luaL_error(TL, msg);
     }
+    
+    
 }
 
 static int apds9960_init (lua_State *L) {
@@ -454,8 +458,10 @@ static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
     }
 
     if (status != LUA_OK) {
-    	const char *msg = lua_tostring(TL, -1);
-    	luaL_error(TL, msg);
+		const char *msg = lua_tostring(TL, -1);
+    	//luaL_error(TL, msg);
+		lua_writestringerror("error in proximity callback %s\n", msg);
+		lua_pop(TL, 1);		
     }
 }
 
@@ -481,7 +487,7 @@ static int apds9960_color_get_continuous (lua_State *L) {
 	    luaL_checktype(L, 2, LUA_TFUNCTION);
         lua_pushvalue(L, 2);
         apds9960_color_get_rgb_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-        apds9960_color_get_rgb_timer = xTimerCreate("apds9960rgb", millis / portTICK_PERIOD_MS, pdTRUE,
+        apds9960_color_get_rgb_timer = xTimerCreate("apds_rgb", millis / portTICK_PERIOD_MS, pdTRUE,
             (void *)apds9960_color_get_rgb_timer, callback_sw_get_rgb);
         xTimerStart(apds9960_color_get_rgb_timer, 0);
     } else {
@@ -535,7 +541,7 @@ static int apds9960_dist_get_dist_thresh (lua_State *L) {
 	    luaL_checktype(L, 4, LUA_TFUNCTION);
       lua_pushvalue(L, 4);
       apds9960_dist_get_dist_thresh_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-      apds9960_dist_get_dist_thresh_timer = xTimerCreate("apds9960dist", millis / portTICK_PERIOD_MS, pdTRUE,
+      apds9960_dist_get_dist_thresh_timer = xTimerCreate("apds_prox", millis / portTICK_PERIOD_MS, pdTRUE,
           (void *)apds9960_dist_get_dist_thresh_timer, callback_dist_get_dist_thresh);
       xTimerStart(apds9960_dist_get_dist_thresh_timer, 0);
     } else {
@@ -639,7 +645,7 @@ static int apds9960_color_get_change (lua_State *L) {
 	    luaL_checktype(L, 2, LUA_TFUNCTION);
         lua_pushvalue(L, 2);
         apds9960_color_get_change_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-        apds9960_color_get_change_timer = xTimerCreate("apds9960colorchange", millis / portTICK_PERIOD_MS, pdTRUE,
+        apds9960_color_get_change_timer = xTimerCreate("apds_color", millis / portTICK_PERIOD_MS, pdTRUE,
             (void *)apds9960_color_get_change_timer, callback_sw_get_colorchange);
         xTimerStart(apds9960_color_get_change_timer, 0);
     } else {
@@ -710,7 +716,7 @@ static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV){
 
 
 static const luaL_Reg apds9960[] = {
-  {"init", apds9960_init},
+    {"init", apds9960_init},
 	{"enable_power", apds9960_enable_power},
 	{"set_LED_drive", apds9960_set_LED_drive},
     {NULL, NULL}
@@ -718,22 +724,22 @@ static const luaL_Reg apds9960[] = {
 
 
 static const luaL_Reg apds9960_color[] = {
-  {"enable", apds9960_color_enable_sensor},
-	{"read", apds9960_color_read},
-	{"read_ambient", apds9960_color_read_ambient},
-	{"get_continuous", apds9960_color_get_continuous},
-	{"get_change", apds9960_color_get_change},
-	{"set_ambient_gain", apds9960_color_set_ambient_gain},
-  {"set_color_table", apds9960_set_color_table},
-  {"set_sv_limits", apds9960_set_sv_limits},
+    {"enable", apds9960_color_enable_sensor},
+    {"read", apds9960_color_read},
+    {"read_ambient", apds9960_color_read_ambient},
+    {"get_continuous", apds9960_color_get_continuous},
+    {"get_change", apds9960_color_get_change},
+    {"set_ambient_gain", apds9960_color_set_ambient_gain},
+    {"set_color_table", apds9960_set_color_table},
+    {"set_sv_limits", apds9960_set_sv_limits},
 
     {NULL, NULL}
 };
 
 static const luaL_Reg apds9960_proximity[] = {
-  {"enable", apds9960_proximity_enable_sensor},
-  {"get_dist_thresh", apds9960_dist_get_dist_thresh},
-	{"read", apds9960_proximity_read},
+    {"enable", apds9960_proximity_enable_sensor},
+    {"get_dist_thresh", apds9960_dist_get_dist_thresh},
+    {"read", apds9960_proximity_read},
     {NULL, NULL}
 };
 
