@@ -74,6 +74,8 @@ float Max_output = 100.0;
 
 TimerHandle_t motor_control_timer;
 
+int encoder_lua_callback;
+
 static servo_t motors[NMOTORS];
 float robot_r;
 
@@ -170,6 +172,33 @@ static void motor_control_callback(TimerHandle_t xTimer) {
 static void callback_enc_func(int i_encoder, int8_t dir, uint32_t counter, uint8_t button) {
     //printf("motor %i, dir %i, counter %i\n", i_encoder, dir, counter);
     motors[i_encoder].counter+=dir;
+    
+    lua_State *TL;
+	lua_State *L;
+	int tref;
+
+	if (encoder_lua_callback != LUA_NOREF) {
+	    L = pvGetLuaState();
+	    TL = lua_newthread(L);
+
+	    tref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+	    lua_rawgeti(L, LUA_REGISTRYINDEX, encoder_lua_callback);
+	    lua_xmove(L, TL, 1);
+        lua_pushinteger(TL, i_encoder+1);
+        lua_pushinteger(TL, dir);
+        lua_pushinteger(TL, counter);
+	    int status = lua_pcall(TL, 3, 0, 0);
+        luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+        
+        if (status != LUA_OK) {
+	    	const char *msg = lua_tostring(TL, -1);
+        	//luaL_error(TL, msg);
+    		lua_writestringerror("error in encoder callback %s\n", msg);
+		    lua_pop(TL, 1);		
+        }
+	}
+    
 }
 
 
@@ -324,6 +353,18 @@ static int omni_drive (lua_State *L) {
 	return 1;
 }
 
+static int omni_set_encoder_callback( lua_State* L ) {
+	if (lua_isfunction(L, 1)) {
+		luaL_checktype(L, 1, LUA_TFUNCTION);
+		lua_pushvalue(L, 1);
+		encoder_lua_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+	} else {
+		encoder_lua_callback = LUA_NOREF;
+	}
+
+    return 1;
+}
+
 
 static const luaL_Reg omni_hbridge[] = {
 //	{"attach", lvl53l0x_attach},
@@ -334,9 +375,10 @@ static const luaL_Reg omni_hbridge[] = {
 	{"set_enable", omni_set_enable},
 	{"set_raw", omni_set_raw},
 	{"set_pid", omni_set_pid},
-  {"set_max_output", omni_set_max_output},
-  {"set_set_rad_per_tick", omni_set_rad_per_tick},
-  {"set_set_wheel_diameter", omni_set_wheel_diameter},
+    {"set_max_output", omni_set_max_output},
+    {"set_set_rad_per_tick", omni_set_rad_per_tick},
+    {"set_set_wheel_diameter", omni_set_wheel_diameter},
+    {"set_encoder_callback", omni_set_encoder_callback},
 
     {NULL, NULL}
 };
