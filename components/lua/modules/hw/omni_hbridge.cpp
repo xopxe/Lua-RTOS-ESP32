@@ -187,7 +187,7 @@ static void callback_enc_func(int i_encoder, int8_t dir, uint32_t counter, uint8
 	    lua_xmove(L, TL, 1);
         lua_pushinteger(TL, i_encoder+1);
         lua_pushinteger(TL, dir);
-        lua_pushinteger(TL, counter);
+        lua_pushinteger(TL, counter);   //*Rad_per_tick
 	    int status = lua_pcall(TL, 3, 0, 0);
         luaL_unref(TL, LUA_REGISTRYINDEX, tref);
         
@@ -257,6 +257,7 @@ static int omni_set_enable (lua_State *L) {
         }
         for (int i=0; i<NMOTORS; i++) {
             motors[i].driver->startMotor();
+            motors[i].counter = 0;
         }
     } else {
         // xTimerStop(motor_control_timer, 0);
