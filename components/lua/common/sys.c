@@ -96,7 +96,14 @@ lua_State *luaS_callback_state(lua_callback_t *callback) {
 }
 
 void luaS_callback_call(lua_callback_t *callback, int args) {
-    lua_pcall(callback->TL, args, 0, 0);
+    int status = lua_pcall(callback->TL, args, 0, 0);
+    
+    //xop check for error in callback    
+    if (status != LUA_OK) {
+		const char *msg = lua_tostring(callback->TL, -1);
+		lua_writestringerror("error in callback %s\n", msg);
+		lua_pop(callback->TL, 1);		
+    }
 
     // Copy callback to thread
     lua_pushvalue(callback->TL, 1);

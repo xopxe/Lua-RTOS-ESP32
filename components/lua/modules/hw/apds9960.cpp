@@ -26,6 +26,8 @@ extern "C"{
 #include "apds9960.h"
 #include <drivers/apds9960.h>
 
+static uint8_t stdio;
+
 TimerHandle_t apds9960_color_get_rgb_timer;
 int apds9960_color_get_rgb_callback=LUA_REFNIL;
 
@@ -75,6 +77,21 @@ static void callback_sw_get_rgb(TimerHandle_t xTimer) {
 	lua_State *TL;
 	lua_State *L;
 	int tref;
+
+    // Set standards streams
+    if (!stdio) {
+        __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
+        __getreent()->_stdout = _GLOBAL_REENT->_stdout;
+        __getreent()->_stderr = _GLOBAL_REENT->_stderr;
+
+        // Work-around newlib is not compiled with HAVE_BLKSIZE flag
+        setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
+        setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
+        setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
+
+        stdio = 1;
+    }
+
 
 	L = pvGetLuaState();
     TL = lua_newthread(L);
@@ -220,15 +237,20 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
 	lua_State *L;
 	int tref;
 
-    /*
-    L = pvGetLuaState();
-    TL = lua_newthread(L);
+    // Set standards streams
+    if (!stdio) {
+        __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
+        __getreent()->_stdout = _GLOBAL_REENT->_stdout;
+        __getreent()->_stderr = _GLOBAL_REENT->_stderr;
 
-    tref = luaL_ref(L, LUA_REGISTRYINDEX);
+        // Work-around newlib is not compiled with HAVE_BLKSIZE flag
+        setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
+        setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
+        setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
 
-    lua_rawgeti(L, LUA_REGISTRYINDEX, apds9960_color_get_change_callback);
-    lua_xmove(L, TL, 1);
-    */
+        stdio = 1;
+    }
+
 
     uint16_t R;
     uint16_t G;
@@ -410,15 +432,20 @@ static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
 	lua_State *L;
 	int tref;
 
-    /*
-    L = pvGetLuaState();
-    TL = lua_newthread(L);
+    // Set standards streams
+    if (!stdio) {
+        __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
+        __getreent()->_stdout = _GLOBAL_REENT->_stdout;
+        __getreent()->_stderr = _GLOBAL_REENT->_stderr;
 
-    tref = luaL_ref(L, LUA_REGISTRYINDEX);
+        // Work-around newlib is not compiled with HAVE_BLKSIZE flag
+        setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
+        setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
+        setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
 
-    lua_rawgeti(L, LUA_REGISTRYINDEX, apds9960_color_get_change_callback);
-    lua_xmove(L, TL, 1);
-    */
+        stdio = 1;
+    }
+
 
     uint8_t d;
     bool ok = sensor.readProximity(d);
