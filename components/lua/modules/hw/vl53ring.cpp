@@ -26,6 +26,8 @@ extern "C"{
 
 #define ADDRESS_DEFAULT 0b0101001
 
+static uint8_t stdio;
+
 TimerHandle_t vl53ring_get_timer;
 int vl53ring_get_callback=LUA_REFNIL;
 
@@ -39,6 +41,21 @@ static sensor_t *sensors;
 int n_sensors;
 
 static void callback_sw_dist(TimerHandle_t xTimer) {
+
+    // Set standards streams
+    if (!stdio) {
+        __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
+        __getreent()->_stdout = _GLOBAL_REENT->_stdout;
+        __getreent()->_stderr = _GLOBAL_REENT->_stderr;
+
+        // Work-around newlib is not compiled with HAVE_BLKSIZE flag
+        setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
+        setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
+        setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
+
+        stdio = 1;
+    }
+
 	lua_State *TL;
 	lua_State *L;
 	int tref;

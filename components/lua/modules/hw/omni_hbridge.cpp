@@ -48,6 +48,8 @@ extern "C"{
 #include "error.h"
 #include <drivers/encoder.h>
 
+static uint8_t stdio;
+
 typedef struct {
 	Drv8833 *driver;
 
@@ -74,7 +76,7 @@ float Max_output = 100.0;
 
 TimerHandle_t motor_control_timer;
 
-int encoder_lua_callback;
+int encoder_lua_callback = LUA_NOREF;
 
 static servo_t motors[NMOTORS];
 float robot_r;
@@ -178,6 +180,20 @@ static void callback_enc_func(int i_encoder, int8_t dir, uint32_t counter, uint8
 	int tref;
 
 	if (encoder_lua_callback != LUA_NOREF) {
+	    // Set standards streams
+        if (!stdio) {
+            __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
+            __getreent()->_stdout = _GLOBAL_REENT->_stdout;
+            __getreent()->_stderr = _GLOBAL_REENT->_stderr;
+
+            // Work-around newlib is not compiled with HAVE_BLKSIZE flag
+            setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
+            setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
+            setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
+
+            stdio = 1;
+        }
+	
 	    L = pvGetLuaState();
 	    TL = lua_newthread(L);
 
@@ -187,7 +203,7 @@ static void callback_enc_func(int i_encoder, int8_t dir, uint32_t counter, uint8
 	    lua_xmove(L, TL, 1);
         lua_pushinteger(TL, i_encoder+1);
         lua_pushinteger(TL, dir);
-        lua_pushinteger(TL, counter);
+        lua_pushinteger(TL, counter);   //*Rad_per_tick
 	    int status = lua_pcall(TL, 3, 0, 0);
         luaL_unref(TL, LUA_REGISTRYINDEX, tref);
         
@@ -257,6 +273,7 @@ static int omni_set_enable (lua_State *L) {
         }
         for (int i=0; i<NMOTORS; i++) {
             motors[i].driver->startMotor();
+            motors[i].counter = 0;
         }
     } else {
         // xTimerStop(motor_control_timer, 0);

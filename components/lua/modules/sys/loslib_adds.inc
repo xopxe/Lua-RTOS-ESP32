@@ -388,6 +388,36 @@ static int os_ls (lua_State *L) {
     struct stat sb;
     struct tm *tm_info;
 
+    // Check for a command like > ls foo*
+    if (path) {
+        dir = opendir(path);
+        if (!dir) {
+            //search back to the last dir name
+            filename = (char*)path + strlen(path) - 1;
+            while (filename > path && *filename!=0 && *filename!='/') {
+                filename--;
+            }
+            //string given is not a valid path
+            //so try to find a matching file
+            if (*filename == '/') {
+                *filename = 0; //will cut off the filename from the path
+                filename++;
+                if(strlen(path)==0) {
+                    path = "/";
+                }
+            }
+            //try to find a matching file
+            //in the current folder
+            if (filename==path) {
+                filename = (char*)path;
+                path = NULL;
+            }
+        }
+        else {
+            closedir(dir);
+        }
+    }
+
     // If path is not present (at all or any more) get the current directory as path
     if (!path) {
         if (!getcwd(cpath, PATH_MAX)) {
@@ -1104,3 +1134,10 @@ static int os_gettime(lua_State *L) {
     lua_pushnumber(L, uptime);
     return 1;
 }
+
+#if defined(MALLOC_DEBUG_H)
+static int os_rmstat(lua_State *L) {
+	RM_STAT;
+	return 0;
+}
+#endif
