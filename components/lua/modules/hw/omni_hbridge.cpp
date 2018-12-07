@@ -179,20 +179,22 @@ static void callback_enc_func(int i_encoder, int8_t dir, uint32_t counter, uint8
 	lua_State *L;
 	int tref;
 
+    // Set standards streams
+    if (!stdio) {
+        __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
+        __getreent()->_stdout = _GLOBAL_REENT->_stdout;
+        __getreent()->_stderr = _GLOBAL_REENT->_stderr;
+
+        // Work-around newlib is not compiled with HAVE_BLKSIZE flag
+        setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
+        setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
+        setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
+
+        stdio = 1;
+    }
+
+
 	if (encoder_lua_callback != LUA_NOREF) {
-	    // Set standards streams
-        if (!stdio) {
-            __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
-            __getreent()->_stdout = _GLOBAL_REENT->_stdout;
-            __getreent()->_stderr = _GLOBAL_REENT->_stderr;
-
-            // Work-around newlib is not compiled with HAVE_BLKSIZE flag
-            setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
-            setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
-            setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
-
-            stdio = 1;
-        }
 	
 	    L = pvGetLuaState();
 	    TL = lua_newthread(L);
@@ -355,16 +357,12 @@ static int omni_drive (lua_State *L) {
     float w_dot = luaL_checknumber( L, 3 );
     float phi = luaL_optnumber( L, 4, 0.0 );
 
-	  SF3dVector w = getW(x_dot, y_dot, w_dot, phi);
+    SF3dVector w = getW(x_dot, y_dot, w_dot, phi);
     //printf("omni computed vel %f %f %f\r\n", w.x, w.y, w.z);
-
-
 
     motors[0].target_v = w.x * m_per_sec_to_tics_per_sec;
     motors[1].target_v = w.y * m_per_sec_to_tics_per_sec;
     motors[2].target_v = w.z * m_per_sec_to_tics_per_sec;
-
-
 
     lua_pushboolean(L, true);
 	return 1;
