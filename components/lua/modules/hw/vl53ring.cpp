@@ -26,6 +26,8 @@ extern "C"{
 
 #define ADDRESS_DEFAULT 0b0101001
 
+static bool initialized = false;
+
 static uint8_t stdio;
 
 TimerHandle_t vl53ring_get_timer;
@@ -86,6 +88,11 @@ static void callback_sw_dist(TimerHandle_t xTimer) {
 }
 
 static int lvl53ring_init (lua_State *L) {
+    if (initialized) {
+        lua_pushboolean(L, true);
+	    return 1;
+    }
+
 	driver_error_t *error;
 
     if (lua_type(L,1)!=LUA_TTABLE) {
@@ -93,6 +100,8 @@ static int lvl53ring_init (lua_State *L) {
         lua_pushstring(L, "bad parameter, must be table");
     	return 2;
     }
+    
+    initialized = true; // if fails after this, will ned reboot for new attempt to init
 
     lua_len(L,1);
     n_sensors = luaL_checkinteger( L, -1 );
