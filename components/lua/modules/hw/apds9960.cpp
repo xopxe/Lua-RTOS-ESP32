@@ -26,7 +26,7 @@ extern "C"{
 #include "apds9960.h"
 #include <drivers/apds9960.h>
 
-static uint8_t stdio;
+static bool initialized = false;
 
 TimerHandle_t apds9960_color_get_rgb_timer;
 int apds9960_color_get_rgb_callback=LUA_REFNIL;
@@ -77,21 +77,6 @@ static void callback_sw_get_rgb(TimerHandle_t xTimer) {
 	lua_State *TL;
 	lua_State *L;
 	int tref;
-
-    // Set standards streams
-    if (!stdio) {
-        __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
-        __getreent()->_stdout = _GLOBAL_REENT->_stdout;
-        __getreent()->_stderr = _GLOBAL_REENT->_stderr;
-
-        // Work-around newlib is not compiled with HAVE_BLKSIZE flag
-        setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
-        setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
-        setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
-
-        stdio = 1;
-    }
-
 
 	L = pvGetLuaState();
     TL = lua_newthread(L);
@@ -232,25 +217,49 @@ static int apds9960_set_sv_limits (lua_State *L) {
   return 1;
 }
 
+static int apds9960_rgb2hsvcolor (lua_State *L) {
+    HSV_set hsv;
+    RGB_set rgb;
+    rgb.r = luaL_checkinteger( L, 1 ); //R<<8;
+    rgb.g = luaL_checkinteger( L, 2 ); //G<<8;
+    rgb.b = luaL_checkinteger( L, 3 ); //B<<8;
+    RGB2HSV(rgb , hsv);
+    
+    lua_pushinteger(L, hsv.h);
+    lua_pushinteger(L, hsv.s);
+    lua_pushinteger(L, hsv.v);
+    
+    int color_i = find_color_in_range(hsv.h, hsv.s, hsv.v);
+    if (color_i >= 0){
+      lua_pushstring(TL, color_ranges[color_i].name);
+    }else{
+      if (color_i == -3){
+        lua_pushstring(TL, COLOR_WHITE);
+      }else if (color_i == -2){
+        lua_pushstring(TL, COLOR_BLACK);
+      }else{
+        lua_pushstring(TL, COLOR_UNKNOWN);
+      }
+    }
+
+    return 4;
+}
+
+
 static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
 	lua_State *TL;
 	lua_State *L;
 	int tref;
 
-    // Set standards streams
-    if (!stdio) {
-        __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
-        __getreent()->_stdout = _GLOBAL_REENT->_stdout;
-        __getreent()->_stderr = _GLOBAL_REENT->_stderr;
+    /*
+    L = pvGetLuaState();
+    TL = lua_newthread(L);
 
-        // Work-around newlib is not compiled with HAVE_BLKSIZE flag
-        setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
-        setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
-        setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
+    tref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-        stdio = 1;
-    }
-
+    lua_rawgeti(L, LUA_REGISTRYINDEX, apds9960_color_get_change_callback);
+    lua_xmove(L, TL, 1);
+    */
 
     uint16_t R;
     uint16_t G;
@@ -329,14 +338,17 @@ static void callback_sw_get_colorchange(TimerHandle_t xTimer) {
 }
 
 static int apds9960_init (lua_State *L) {
-  bool ok = sensor.init();
-  if (!ok) {
-      lua_pushnil(L);
-      lua_pushstring(L, "init failed");
-      return 2;
-  }
-  lua_pushboolean(L, true);
-  return 1;
+    if (!initialized) {
+      bool ok = sensor.init();
+      if (!ok) {
+          lua_pushnil(L);
+          lua_pushstring(L, "init failed");
+          return 2;
+      }
+    }
+    initialized = true;
+    lua_pushboolean(L, true);
+    return 1;
 }
 
 static int apds9960_enable_power (lua_State *L) {
@@ -432,20 +444,15 @@ static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
 	lua_State *L;
 	int tref;
 
-    // Set standards streams
-    if (!stdio) {
-        __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
-        __getreent()->_stdout = _GLOBAL_REENT->_stdout;
-        __getreent()->_stderr = _GLOBAL_REENT->_stderr;
+    /*
+    L = pvGetLuaState();
+    TL = lua_newthread(L);
 
-        // Work-around newlib is not compiled with HAVE_BLKSIZE flag
-        setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
-        setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
-        setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
+    tref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-        stdio = 1;
-    }
-
+    lua_rawgeti(L, LUA_REGISTRYINDEX, apds9960_color_get_change_callback);
+    lua_xmove(L, TL, 1);
+    */
 
     uint8_t d;
     bool ok = sensor.readProximity(d);
@@ -717,7 +724,7 @@ static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV){
 
     HSV.v = max;                // v, 0..255
 
-    delta = max - min;                      // 0..255, < v
+    delta = max - min;          // 0..255, < v
 
     if( max != 0 )
         HSV.s = (int)(delta)*255 / max;        // s, 0..255
@@ -759,6 +766,7 @@ static const luaL_Reg apds9960_color[] = {
     {"set_ambient_gain", apds9960_color_set_ambient_gain},
     {"set_color_table", apds9960_set_color_table},
     {"set_sv_limits", apds9960_set_sv_limits},
+    {"rgb2hsv", apds9960_rgb2hsv},
 
     {NULL, NULL}
 };
