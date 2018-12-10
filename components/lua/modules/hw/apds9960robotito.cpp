@@ -48,7 +48,6 @@ int apds9960_color_get_change_callback = LUA_REFNIL;
 TimerHandle_t apds9960_proximity_get_thresh_timer;
 int apds9960_proximity_get_thresh_callback = LUA_REFNIL;
 
-bool hsv_mode = false;
 int current_color_i = -1;
 int saturation_threshold = 0;
 int value_threshold = 0;
@@ -338,7 +337,14 @@ static int apds9960_init (lua_State *L) {
             lua_pushstring(L, "error setting pin to out");
             lua_pushinteger(L, LED_PIN);
             return 3;
-        }      
+        }
+        ok = sensor.enablePower();
+        if (!ok) {
+            lua_pushnil(L);
+            lua_pushstring(L, "failure enabling power");
+            return 2;
+        }
+        
     }
     initialized = true;
     lua_pushboolean(L, true);
@@ -464,9 +470,6 @@ static int apds9960_color_get_change (lua_State *L) {
 	    luaL_checktype(L, 1, LUA_TFUNCTION);
         lua_pushvalue(L, 1);
         apds9960_color_get_change_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-
-        saturation_threshold = luaL_optinteger( L, 2, 0 );
-        value_threshold = luaL_optinteger( L, 3, 0 );
     } else {
         if (apds9960_color_get_change_callback==LUA_REFNIL) {
             lua_pushnil(L);
@@ -506,20 +509,6 @@ static int apds9960_proximity_get_thresh (lua_State *L) {
         luaL_checktype(L, 1, LUA_TFUNCTION);
         lua_pushvalue(L, 1);
         apds9960_proximity_get_thresh_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-
-        dist_threshold = luaL_checkinteger( L, 2 );
-        if (dist_threshold < 0) {
-            lua_pushnil(L);
-            lua_pushstring(L, "invalid thresh");
-            return 2;
-        }
-
-        dist_histeresis = luaL_checkinteger( L, 3 );
-        if (dist_histeresis < 0) {
-            lua_pushnil(L);
-            lua_pushstring(L, "invalid histeresis");
-            return 2;
-        }
     } else {
         if (apds9960_proximity_get_thresh_callback==LUA_REFNIL) {
             lua_pushnil(L);
@@ -534,22 +523,34 @@ static int apds9960_proximity_get_thresh (lua_State *L) {
 }
 
 
-static int apds9960_proximity_enable_sensor (lua_State *L) {
+static int apds9960_proximity_enable (lua_State *L) {
     bool enable = lua_toboolean(L, 1);
     if (enable) {
         uint32_t millis = luaL_checkinteger( L, 1 );
-        bool interrupts = lua_toboolean( L, 2 );
 	    if (millis < 1) {
             lua_pushnil(L);
             lua_pushstring(L, "invalid period");
             return 2;
 	    }
 	    
-	    if (!sensor.enableProximitySensor(interrupts)) {
+        dist_threshold = luaL_checkinteger( L, 2 );
+        if (dist_threshold < 0) {
+            lua_pushnil(L);
+            lua_pushstring(L, "invalid thresh");
+            return 2;
+        }
+
+        dist_histeresis = luaL_checkinteger( L, 3 );
+        if (dist_histeresis < 0) {
+            lua_pushnil(L);
+            lua_pushstring(L, "invalid histeresis");
+            return 2;
+        }
+	    
+	    if (!sensor.enableProximitySensor(false)) {
             lua_pushnil(L);
             lua_pushstring(L, "failure to enable sensor");
-            lua_pushboolean(L, interrupts);
-            return 3;
+            return 2;
 	    }
 	    
         //set timer for callback
@@ -575,36 +576,23 @@ static int apds9960_proximity_enable_sensor (lua_State *L) {
 }
 
 
-static int apds9960_proximity_read (lua_State *L) {
-    uint8_t d;
-    bool ok = sensor.readProximity(d);
-    if (ok) {
-        lua_pushinteger(L, d);
-        return 1;
-    } else {
-        lua_pushnil(L);
-        lua_pushstring(L, "failure");
-        return 2;
-    }
-}
-
-
 static int apds9960_color_enable (lua_State *L) {
+    gpio_pin_clr(LED_PIN);
+    led_on = false;
+
     bool enable = lua_toboolean(L, 1);
     if (enable) {
         uint32_t millis = luaL_checkinteger( L, 1 );
-        bool interrupts = lua_toboolean( L, 2 );
 	    if (millis < 1) {
             lua_pushnil(L);
             lua_pushstring(L, "invalid period");
             return 2;
 	    }
 	    
-        if (!sensor.enableLightSensor(interrupts) ) {
+        if (!sensor.enableLightSensor(false) ) {
             lua_pushnil(L);
             lua_pushstring(L, "failure to enable sensor");
-            lua_pushboolean(L, interrupts);
-            return 3;
+            return 2;
         }
 
         //set timer for callback
@@ -688,8 +676,8 @@ static const luaL_Reg apds9960[] = {
 
 static const luaL_Reg apds9960_color[] = {
     {"enable", apds9960_color_enable},
-    {"get_continuous", apds9960_color_get_continuous},
-    {"get_change", apds9960_color_get_change},
+    {"set_rgb_callback", apds9960_color_get_continuous},
+    {"set_color_callback", apds9960_color_get_change},
     {"set_ambient_gain", apds9960_color_set_ambient_gain},
     {"set_color_table", apds9960_set_color_table},
     {"set_sv_limits", apds9960_set_sv_limits},
@@ -698,14 +686,13 @@ static const luaL_Reg apds9960_color[] = {
 };
 
 static const luaL_Reg apds9960_proximity[] = {
-    {"enable", apds9960_proximity_enable_sensor},
-    {"get_thresh", apds9960_proximity_get_thresh},
-    {"read", apds9960_proximity_read},
+    {"enable", apds9960_proximity_enable},
+    {"set_callback", apds9960_proximity_get_thresh},
     {NULL, NULL}
 };
 
 
-LUALIB_API int luaopen_apds9960( lua_State *L ) {
+LUALIB_API int luaopen_apds9960robotito( lua_State *L ) {
 
     //register
     luaL_newlib(L, apds9960);
@@ -721,7 +708,7 @@ LUALIB_API int luaopen_apds9960( lua_State *L ) {
 	return 1;
 }
 
-MODULE_REGISTER_RAM(APDS9960, apds9960, luaopen_apds9960, 1);
+MODULE_REGISTER_RAM(APDS9960R, apds9960robotito, luaopen_apds9960robotito, 1);
 
 #ifdef __cplusplus
 }
