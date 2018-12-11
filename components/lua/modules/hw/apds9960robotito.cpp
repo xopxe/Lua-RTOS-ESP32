@@ -27,8 +27,8 @@ extern "C"{
 #include <drivers/apds9960.h>
 #include <drivers/gpio.h>
 
-#define U16_TO_100 (100.0/(2^16))
-#define U8_TO_100 (100.0/(2^8))
+//#define U16_TO_100 100/(2^16)
+//#define U8_TO_100 100/(2^8)
 
 static uint8_t stdio;
 
@@ -237,19 +237,19 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
         }
         gpio_pin_clr(LED_PIN);
         led_on = false;
-        R = R-R_off;
-        G = G-G_off;
-        B = B-B_off;
-        A = A-A_off;
+        if (R>R_off) R = R-R_off;
+        if (G>G_off) G = G-G_off;
+        if (B>B_off) B = B-B_off;
+        if (A>A_off) A = A-A_off;
         
         HSV_set hsv;
         RGB_set rgb;
         rgb.r = R; //R<<8;
         rgb.g = G; //G<<8;
         rgb.b = B; //B<<8;
-        RGB2HSV(rgb , hsv);
+        RGB2HSV(rgb, hsv);
         
-        /*
+        
         ////////////
         if (apds9960r_color_get_rgb_callback!=LUA_REFNIL) {
             L = pvGetLuaState();
@@ -260,20 +260,24 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
             lua_rawgeti(L, LUA_REGISTRYINDEX, apds9960r_color_get_rgb_callback);
             lua_xmove(L, TL, 1);
                
-            lua_pushnumber(TL, R * U16_TO_100);
-            lua_pushnumber(TL, G * U16_TO_100);
-            lua_pushnumber(TL, B * U16_TO_100);
-            lua_pushnumber(TL, A * U16_TO_100);
-            status = lua_pcall(TL, 4, 0, 0);
+            lua_pushinteger(TL, R),
+            lua_pushinteger(TL, G);
+            lua_pushinteger(TL, B);
+            lua_pushinteger(TL, A);
+            lua_pushinteger(TL, hsv.h);
+            lua_pushinteger(TL, hsv.s);
+            lua_pushinteger(TL, hsv.v);
+            status = lua_pcall(TL, 7, 0, 0);
+            luaL_unref(TL, LUA_REGISTRYINDEX, tref);
             if (status != LUA_OK) {
 		        const char *msg = lua_tostring(TL, -1);
-		        lua_writestringerror("error in color_rgb callback %s\n", msg);
+		        lua_writestringerror("error in color_rgb callback: %s\n", msg);
 		        lua_pop(TL, 1);		
                 //luaL_error(TL, msg);
             }   
         }       
         ////////////
-        */
+        
 
         /*
         if (hsv.s<saturation_threshold || hsv.v<value_threshold) {
@@ -282,8 +286,6 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
         */
 
         int color_i = find_color_in_range(hsv.h, hsv.s, hsv.v);
-
-        //printf("----%i %i %i %i %i\r\n", R, G, B, A, color_i);
 
         if (apds9960r_color_get_change_callback!=LUA_REFNIL && color_i!=current_color_i) {
             current_color_i = color_i;
@@ -307,17 +309,16 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
               }
             }
 
-            lua_pushinteger(TL, hsv.s * U8_TO_100);
-            lua_pushinteger(TL, hsv.v * U8_TO_100);
-            status = lua_pcall(TL, 3, 0, 0);
-            //printf ("to unref %i %i\r\n", LUA_OK, status);
+            lua_pushinteger(TL, hsv.h);
+            lua_pushinteger(TL, hsv.s);
+            lua_pushinteger(TL, hsv.v);
+            status = lua_pcall(TL, 4, 0, 0);
             luaL_unref(TL, LUA_REGISTRYINDEX, tref);
-            //printf ("after unref\r\n");
 
             if (status != LUA_OK) {
             
 		        const char *msg = lua_tostring(TL, -1);
-		        lua_writestringerror("error in color_change callback %s\n", msg);
+		        lua_writestringerror("error in color_change callback: %s\n", msg);
 		        lua_pop(TL, 1);		
                 //luaL_error(TL, msg);
             
@@ -328,6 +329,7 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
         }
 
     } else {
+printf("Error in sensor.readColor: %i", ok);
 /*
         //prepare thread
         L = pvGetLuaState();
