@@ -48,8 +48,6 @@ extern "C"{
 #include "error.h"
 #include <drivers/encoder.h>
 
-static uint8_t stdio;
-
 typedef struct {
 	Drv8833 *driver;
 
@@ -178,21 +176,6 @@ static void callback_enc_func(int i_encoder, int8_t dir, uint32_t counter, uint8
     lua_State *TL;
 	lua_State *L;
 	int tref;
-
-    // Set standards streams
-    if (!stdio) {
-        __getreent()->_stdin  = _GLOBAL_REENT->_stdin;
-        __getreent()->_stdout = _GLOBAL_REENT->_stdout;
-        __getreent()->_stderr = _GLOBAL_REENT->_stderr;
-
-        // Work-around newlib is not compiled with HAVE_BLKSIZE flag
-        setvbuf(_GLOBAL_REENT->_stdin , NULL, _IONBF, 0);
-        setvbuf(_GLOBAL_REENT->_stdout, NULL, _IONBF, 0);
-        setvbuf(_GLOBAL_REENT->_stderr, NULL, _IONBF, 0);
-
-        stdio = 1;
-    }
-
 
 	if (encoder_lua_callback != LUA_NOREF) {
 	
