@@ -331,7 +331,6 @@ printf("Error in sensor.readColor: %i", ok);
 }
 
 static int apds9960_init (lua_State *L) {
-	driver_error_t *error;
     if (!initialized) {
         bool ok = sensor.init();
         if (!ok) {
@@ -578,9 +577,6 @@ static int apds9960_proximity_enable (lua_State *L) {
 
 
 static int apds9960_color_enable (lua_State *L) {
-    gpio_pin_clr(LED_PIN);
-    led_on = false;
-
     bool enable = lua_toboolean(L, 1);
     if (enable) {
         uint32_t millis = luaL_checkinteger( L, 1 );
