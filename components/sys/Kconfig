@@ -396,7 +396,7 @@ menu "Lua RTOS"
          config LUA_RTOS_USE_HTTP_SERVER
             depends on LUA_RTOS_LUA_USE_NET
             bool "Enable HTTP server"
-            default y
+            default n
 
          config LUA_RTOS_HTTP_SERVER_PORT
             depends on LUA_RTOS_USE_HTTP_SERVER
@@ -1494,6 +1494,23 @@ menu "Lua RTOS"
             config LUA_RTOS_LUA_USE_DRV8833
                bool "Include DRV8833 driver"
                default y
+
+                  
+            menu "Webserver with websockets"
+                 config LUA_RTOS_LUA_USE_WEBSERVER
+                    bool "Enable Webserver"
+                    default y
+
+                 config LUA_RTOS_WEBSERVER_PORT
+                    depends on LUA_RTOS_LUA_USE_WEBSERVER
+                       int "HTTP server port"
+                       range 0 65536
+                       default 80
+                    help
+                       TCP port where HTTP server listens
+              endmenu
+
+
 
             config VL53L0X_I2C_CHANNEL
                int "i2c channel to use for VL53*"
