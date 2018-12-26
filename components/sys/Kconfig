@@ -1508,6 +1508,14 @@ menu "Lua RTOS"
                        default 80
                     help
                        TCP port where HTTP server listens
+
+                 config LUA_RTOS_WEBSERVER_ROOT
+                    depends on LUA_RTOS_LUA_USE_WEBSERVER
+                       string "filesystem root"
+                       default www
+                    help
+                       Path of the root directory for content                       
+                
               endmenu
 
 

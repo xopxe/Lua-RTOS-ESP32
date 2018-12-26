@@ -14,6 +14,7 @@ extern "C"{
 HttpServer httpServer;
 
 static void helloWorldHandler(HttpRequest* pRequest, HttpResponse* pResponse) {
+    printf(">>helloWorldHandler\r\n");
     pResponse->setStatus(HttpResponse::HTTP_STATUS_OK, "OK");
     pResponse->addHeader(HttpRequest::HTTP_HEADER_CONTENT_TYPE, "text/plain");
     pResponse->sendData("Hello back");
@@ -21,6 +22,8 @@ static void helloWorldHandler(HttpRequest* pRequest, HttpResponse* pResponse) {
 }    
 
 static int lwebserver_init (lua_State *L) {
+
+    httpServer.setRootPath(CONFIG_LUA_RTOS_WEBSERVER_ROOT);
 
     httpServer.addPathHandler(
         HttpRequest::HTTP_METHOD_GET,
