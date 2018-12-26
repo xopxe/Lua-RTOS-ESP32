@@ -258,7 +258,6 @@ static int omni_set_enable (lua_State *L) {
         }
         for (int i=0; i<NMOTORS; i++) {
             motors[i].driver->startMotor();
-            motors[i].counter = 0;
         }
     } else {
         // xTimerStop(motor_control_timer, 0);
