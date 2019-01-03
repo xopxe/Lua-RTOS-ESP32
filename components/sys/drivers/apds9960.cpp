@@ -22,7 +22,7 @@
  //#include <Wire.h>
 
 #include "sdkconfig.h"
-#if CONFIG_LUA_RTOS_LUA_USE_APDS9960
+#if CONFIG_LUA_RTOS_LUA_USE_APDS9960 || CONFIG_LUA_RTOS_LUA_USE_APDS9960R
 
 
 #ifdef __cplusplus
