@@ -114,17 +114,16 @@ private:
 		// Test if the path is a directory.
 		if (FileSystem::isDirectory(fileName)) {
 			ESP_LOGD(LOG_TAG, "Path %s is a directory", fileName.c_str());
-			
+
 			std::string fileNameIndex = fileName + "/index.html";
-            std::ifstream infile(fileNameIndex); // search an index.html file
-            if (infile.good()) {
-                infile.close();
-            	response.sendFile(fileNameIndex, m_pHttpServer->getFileBufferSize());
-            } else {
-                m_pHttpServer->listDirectory(fileName, response);   // List the contents of the directory
-            }
-    
-			
+			std::ifstream infile(fileNameIndex); // search an index.html file
+			if (infile.good()) {
+				infile.close();
+				response.sendFile(fileNameIndex, m_pHttpServer->getFileBufferSize());
+			} else {
+				m_pHttpServer->listDirectory(fileName, response);   // List the contents of the directory
+			}
+
 			return;
 		} // Path was a directory.
 
