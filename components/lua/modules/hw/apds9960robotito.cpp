@@ -23,7 +23,7 @@ extern "C"{
   #include "lauxlib.h"
 #endif
 
-#include "apds9960.h"
+#include "apds9960robotito.h"
 #include <drivers/apds9960.h>
 #include <drivers/gpio.h>
 
@@ -260,7 +260,16 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
             lua_pushinteger(TL, hsv.h);
             lua_pushinteger(TL, hsv.s);
             lua_pushinteger(TL, hsv.v);
-            status = lua_pcall(TL, 7, 0, 0);
+            
+            /////M
+            lua_pushinteger(TL, R_off);
+            lua_pushinteger(TL, G_off);
+            lua_pushinteger(TL, B_off);
+            /////M
+            
+            //status = lua_pcall(TL, 7, 0, 0);/////M
+            status = lua_pcall(TL, 7+3, 0, 0);/////M
+            
             luaL_unref(TL, LUA_REGISTRYINDEX, tref);
             if (status != LUA_OK) {
 		        const char *msg = lua_tostring(TL, -1);

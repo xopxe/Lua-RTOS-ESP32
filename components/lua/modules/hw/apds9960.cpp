@@ -26,8 +26,8 @@ extern "C"{
 #include "apds9960.h"
 #include <drivers/apds9960.h>
 
-static lua_Number u8_to_100 = 100.0/(2^8);
-static lua_Number u16_to_100 = 100.0/(2^16);
+//static lua_Number u8_to_100 = 100.0/(2^8);
+//static lua_Number u16_to_100 = 100.0/(2^16);
 
 static uint8_t stdio;
 
@@ -46,9 +46,13 @@ int saturation_threshold = 0;
 int value_threshold = 0;
 int n_colors = 0;
 color_range *color_ranges;
-int min_sat = 50;
+
 int min_val = 20;
 int max_val = 200;
+
+int delta_h = 10;
+int delta_s = 50;
+int delta_v = 50;
 
 
 int dist_threshold = 0;
@@ -61,17 +65,21 @@ static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV);
 
 static int find_color_in_range(int h, int s, int v) {
     if (v < min_val){
-        return -2; //black
-    }else if (v > max_val){
-        return -3; //white
-    }else if (s > min_sat){
+        return COLOR_BLACK_I; //black
+    } else if (v > max_val){
+        return COLOR_WHITE_I; //white
+    } else {
         for (int color_i=0; color_i<n_colors; color_i++) {
-            if (h>=color_ranges[color_i].min && h<=color_ranges[color_i].max) {
+            if (
+                h>=color_ranges[color_i].h-delta_h && h<=color_ranges[color_i].h+delta_h &&
+                s>=color_ranges[color_i].s-delta_s && s<=color_ranges[color_i].s+delta_s &&
+                v>=color_ranges[color_i].v-delta_v && v<=color_ranges[color_i].v+delta_v
+            ) {
                 return color_i;
             }
         }
     }
-    return -1; //unknown
+    return COLOR_UNKNOWN_I; //unknown
 }
 
 
@@ -100,7 +108,7 @@ static int apds9960_set_color_table(lua_State *L){
             }
 
             size_t str_len;
-            lua_rawgeti(L,-1,1);
+            lua_rawgeti(L,-1,1); // first entry
 
             if (lua_type(L,-1)!=LUA_TSTRING) {
                 lua_pushnil(L);
@@ -113,15 +121,19 @@ static int apds9960_set_color_table(lua_State *L){
             lua_pop(L,1);
 
 
-            lua_rawgeti(L,-1,2); // first entry
-            color_ranges[i-1].min = lua_tointeger(L,-1);
+            lua_rawgeti(L,-1,2); // second entry
+            color_ranges[i-1].h = lua_tointeger(L,-1);
             lua_pop(L,1);
 
-            lua_rawgeti(L,-1,3); // first entry
-            color_ranges[i-1].max = lua_tointeger(L,-1);
+            lua_rawgeti(L,-1,3); // third entry
+            color_ranges[i-1].s = lua_tointeger(L,-1);
             lua_pop(L,1);
 
-            printf("Added -> color = %s, min = %i , max = %i\r\n", color_ranges[i-1].name, color_ranges[i-1].min, color_ranges[i-1].max);
+            lua_rawgeti(L,-1,4); // fourth entry
+            color_ranges[i-1].v = lua_tointeger(L,-1);
+            lua_pop(L,1);
+            
+            printf("Added -> color = %s, (h,s,v) = (%i,%i,%i)\r\n", color_ranges[i-1].name, color_ranges[i-1].h, color_ranges[i-1].s,color_ranges[i-1].v);
 
         }
         lua_pop(L, 1); // pop entry
@@ -131,11 +143,16 @@ static int apds9960_set_color_table(lua_State *L){
 }
 
 static int apds9960_set_sv_limits (lua_State *L) {
-  min_sat = luaL_checkinteger( L, 1 );
-  min_val = luaL_checkinteger( L, 2 );
-  max_val = luaL_checkinteger( L, 3 );
-  lua_pushboolean(L, true);
-  return 1;
+    delta_h = luaL_checkinteger( L, 1 );
+    delta_s = luaL_checkinteger( L, 2 );
+    delta_v = luaL_checkinteger( L, 3 );
+    min_val = luaL_optinteger( L, 4, min_val );
+    max_val = luaL_optinteger( L, 5, max_val );
+    
+    printf("Color limits set dh=%i ds=%i dv=%i minv=%i maxv=%i\r\n",delta_h, delta_s, delta_v, min_val, max_val);
+       
+    lua_pushboolean(L, true);
+    return 1;
 }
 
 /*
@@ -269,9 +286,9 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
             if (color_i >= 0){
               lua_pushstring(TL, color_ranges[color_i].name);
             }else{
-              if (color_i == -3){
+              if (color_i == COLOR_WHITE_I){
                 lua_pushstring(TL, COLOR_WHITE);
-              }else if (color_i == -2){
+              }else if (color_i == COLOR_BLACK_I){
                 lua_pushstring(TL, COLOR_BLACK);
               }else{
                 lua_pushstring(TL, COLOR_UNKNOWN);
@@ -628,7 +645,7 @@ static int apds9960_color_enable (lua_State *L) {
  *   - NB: if s == 0, then h = 0 (undefined)
  ******************************************************************************/
 static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV){
-    unsigned char min, max, delta;
+    uint16_t min, max, delta;
 
     if(RGB.r<RGB.g)min=RGB.r; else min=RGB.g;
     if(RGB.b<min)min=RGB.b;
@@ -636,12 +653,12 @@ static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV){
     if(RGB.r>RGB.g)max=RGB.r; else max=RGB.g;
     if(RGB.b>max)max=RGB.b;
 
-    HSV.v = max;                // v, 0..255
+    HSV.v = max;                // v, 16bit
 
-    delta = max - min;          // 0..255, < v
+    delta = max - min;          // 16bit, < v
 
     if( max != 0 )
-        HSV.s = (int)(delta)*255 / max;        // s, 0..255
+        HSV.s = (int)(delta)*2^16 / max;        // s, 16bit
     else {
         // r = g = b = 0        // s = 0, v is undefined
         HSV.s = 0;
