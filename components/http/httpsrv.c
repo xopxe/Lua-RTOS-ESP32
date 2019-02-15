@@ -91,6 +91,7 @@ static lua_State *LL=NULL;
 static wifi_mode_t wifi_mode = WIFI_MODE_STA;
 static u8_t http_refcount = 0;
 static u8_t volatile http_shutdown = 0;
+static u8_t volatile script_wants_reboot = 0;
 static u8_t http_captiverun = 0;
 static char ip4addr[IP4ADDR_STRLEN_MAX];
 static int socket_server_normal = 0;
@@ -111,7 +112,7 @@ typedef struct {
 	http_server_config *config;
 	int socket;
 	SSL *ssl;
-	int headers_sent;
+	uint8_t headers_sent;
 	struct sockaddr_storage *client;
 	socklen_t client_len;
 	char *path;
@@ -318,6 +319,14 @@ void send_error(http_request_handle *request, int status, char *title, char *ext
 	do_printf(request, HTTP_ERROR_LINE_2, status, title);
 	do_printf(request, HTTP_ERROR_LINE_3, text);
 	do_printf(request, HTTP_ERROR_LINE_4);
+
+	// after send_error the request will usually end
+	// so make sure the buffer used in do_printf is deleted here
+	// as the calling function might not really notice it's usage
+	if (request->printf_buffer) {
+		free(request->printf_buffer);
+		request->printf_buffer = NULL;
+	}
 }
 
 #define CHUNK_SIZE_INITIAL (BUFFER_SIZE_INITIAL-2)
@@ -380,13 +389,14 @@ int http_status(lua_State* L) {
 		if (!request->config->secure) fsync(request->socket);
 		request->headers_sent = 1;
 
+		lua_pop(L, lua_gettop(L));
 		lua_pushinteger(L, 1);
 	}
 	else {
+		lua_pop(L, lua_gettop(L));
 		lua_pushinteger(L, 0);
 	}
 
-	lua_pop(L, 1);
 	return 1;
 }
 
@@ -418,10 +428,28 @@ int http_print(lua_State* L) {
 		}
 	}
 
-	lua_pop(L, 1);
+	lua_pop(L, nargs);
 	return 0;
 }
 
+int http_reboot(lua_State* L) {
+
+	lua_getglobal(L, "http_internal_handle");
+	if (!lua_islightuserdata(L, -1)) {
+		return luaL_error(L, "this function may only be called inside a lua script served by httpsrv");
+	}
+	http_request_handle *request = (http_request_handle*)lua_touserdata(L, -1);
+
+	if (!request) {
+		return luaL_error(L, "this function may only be called inside a lua script served by httpsrv");
+	}
+
+	script_wants_reboot = 1;
+
+	return 0;
+}
+
+#define LUA_INTERPRETER_ERROR_LENGTH 256
 void send_file(http_request_handle *request, char *path, struct stat *statbuf) {
 	int n;
 	char *data;
@@ -455,17 +483,18 @@ void send_file(http_request_handle *request, char *path, struct stat *statbuf) {
 				send_error(request, 500, "Internal Server Error", NULL, "Folder found where a precompiled file is expected.");
 			}
 			else {
-				lua_State *L = pvGetLuaState(); /* get state */
-				lua_State* TL = L ? lua_newthread(L) : NULL;
+				lua_State *L = pvGetLuaState(); // Get the thread's Lua state
+				lua_State *TL = lua_newthread(L);
+				int tref = luaL_ref(L, LUA_REGISTRYINDEX);
 				if (L == NULL || TL == NULL) {
 					send_error(request, 500, "Internal Server Error", NULL, L ? "Cannot create thread.":"Cannot get state.");
 				}
 				else {
 					if (luaL_loadfile(TL, ppath)) {
-						char* error = (char *)malloc(2048);
+						char* error = (char *)malloc(LUA_INTERPRETER_ERROR_LENGTH+1);
 						if (error) {
 							*error = '\0';
-							snprintf(error, 2048, "FATAL ERROR: %s", lua_tostring(TL, -1));
+							snprintf(error, LUA_INTERPRETER_ERROR_LENGTH, "FATAL ERROR: %s", lua_tostring(TL, -1));
 							send_error(request, 500, "Internal Server Error", NULL, error);
 							free(error);
 						}
@@ -544,6 +573,8 @@ void send_file(http_request_handle *request, char *path, struct stat *statbuf) {
 						do_printf(request, "0\r\n\r\n");
 					}
 				}
+
+				luaL_unref(TL, LUA_REGISTRYINDEX, tref);
 			}
 		}
 		else {
@@ -822,6 +853,10 @@ static int process(http_request_handle *request) {
 						free(pathbuf);
 						request->path = NULL;
 						request->data = NULL;
+						if (request->printf_buffer) {
+							free(request->printf_buffer);
+							request->printf_buffer = NULL;
+						}
 						return 0;
 					}
 				}
@@ -1018,6 +1053,7 @@ static void mbedtls_zeroize( void *v, size_t n ) {
 	volatile unsigned char *p = v; while( n-- ) *p++ = 0;
 }
 
+extern __NOINIT_ATTR uint32_t backtrace_count;
 static void *http_thread(void *arg) {
 	http_server_config *config = (http_server_config*) arg;
 	struct sockaddr_in6 sin;
@@ -1167,6 +1203,12 @@ static void *http_thread(void *arg) {
 			close(client);
 			client = -1;
 		}
+
+		if (script_wants_reboot) {
+			delay(2); //probably required for data to be sent
+			backtrace_count = 0;
+			esp_restart(); /* restart without panic'ing */
+		}
 	}
 
 	if (config->secure) {
@@ -1301,6 +1343,10 @@ void http_stop() {
 	if(http_refcount) {
 		http_shutdown++;
 	}
+}
+
+int http_running() {
+	return (http_refcount>0 ? 1 : 0);
 }
 
 #endif
