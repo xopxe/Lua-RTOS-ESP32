@@ -1,33 +1,26 @@
-#ifndef APDS9960_H
-#define APDS9960_H
-
-#define COLOR_UNKNOWN_I -1
-#define COLOR_BLACK_I -2
-#define COLOR_WHITE_I -3
+#ifndef APDS9960R_H
+#define APDS9960R_H
 
 
 #define COLOR_UNKNOWN "unknown"
-#define COLOR_BLACK "black"
 #define COLOR_WHITE "white"
-
-
+#define COLOR_BLACK "black"
 struct RGB_set {
- uint16_t r;
- uint16_t g;
- uint16_t b;
+ char r;
+ char g;
+ char b;
 };
 
 struct HSV_set {
  signed int h;
- uint16_t s;
- uint16_t v;
+ char s;
+ char v;
 };
 
 struct color_range {
- char* name;
- signed int h;
- uint16_t s;
- uint16_t v;
+    char* name;
+    int min;
+    int max;
 };
 
 // #define N_NAMED_COLORS 6
@@ -41,4 +34,4 @@ struct color_range {
 // };
 
 
-#endif  /*APDS9960_H*/
+#endif  /*APDS9960R_H*/

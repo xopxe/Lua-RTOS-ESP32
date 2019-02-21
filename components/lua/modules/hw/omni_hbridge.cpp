@@ -120,21 +120,30 @@ static void motor_control_callback(TimerHandle_t xTimer) {
         m->counter = 0;
 
         float error = m->target_v - current_v;
+        float accum_error = m->accum_error+error;
 
-        m->accum_error += error;
-        if (m->accum_error > Max_output) {
-            m->accum_error = Max_output;
-        } else if (m->accum_error < -Max_output) {
-            m->accum_error = -Max_output;
+        /*
+        float Iterm = Ki * accum_error;
+        if (Iterm > Max_output) {
+            Iterm = Max_output;
+        } else if (Iterm < -Max_output) {
+            Iterm = -Max_output;
         }
+        */
 
         m->output = KF * m->target_v;
         m->output += Kp * error;
-        m->output += Ki * m->accum_error;
+        m->output += Ki * accum_error;
         m->output += Kd * (error - m->prev_error);
 
-        if (m->output>Max_output) m->output=Max_output;
-        else if (m->output<-Max_output) m->output=-Max_output;
+        if (m->output>Max_output) { 
+            m->output=Max_output;
+        } else if (m->output<-Max_output) {
+            m->output=-Max_output;
+        } else {
+            m->accum_error = accum_error; // only here, for windup protection
+        }
+            
 
         m->prev_error = error;
 
@@ -346,6 +355,10 @@ static int omni_drive (lua_State *L) {
     motors[0].target_v = w.x * m_per_sec_to_tics_per_sec;
     motors[1].target_v = w.y * m_per_sec_to_tics_per_sec;
     motors[2].target_v = w.z * m_per_sec_to_tics_per_sec;
+    
+    motors[0].accum_error = 0;
+    motors[1].accum_error = 0;
+    motors[2].accum_error = 0;
 
     lua_pushboolean(L, true);
 	return 1;
