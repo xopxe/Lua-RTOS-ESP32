@@ -110,9 +110,9 @@ static int lcpu_model(lua_State *L) {
 }
 
 static int lcpu_board(lua_State *L) {
-	lua_pushstring(L, LUA_RTOS_BOARD);
-	lua_pushstring(L, CONFIG_LUA_RTOS_BOARD_SUBTYPE);
-	lua_pushstring(L, CONFIG_LUA_RTOS_BOARD_BRAND);
+    lua_pushstring(L, CONFIG_LUA_RTOS_BOARD_TYPE);
+    lua_pushstring(L, CONFIG_LUA_RTOS_BOARD_SUBTYPE);
+	lua_pushstring(L, "");
 	return 3;
 }
 
@@ -267,8 +267,7 @@ static int lcpu_speed(lua_State *L) {
 	}
 #endif
 
-	rtc_cpu_freq_t current_frequency = rtc_clk_cpu_freq_get();
-	lua_pushinteger(L, rtc_clk_cpu_freq_value(current_frequency));
+	lua_pushinteger(L, cpu_speed() / 1000000);
 	return 1;
 }
 
