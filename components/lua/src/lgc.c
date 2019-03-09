@@ -26,6 +26,12 @@
 #include "ltm.h"
 
 
+#if LUA_USE_ROTABLE
+#include <pthread.h>
+static uint8_t mtx_initialized = 0;
+static struct mtx mtx_gc;
+#endif
+
 /*
 ** internal state for collector while inside the atomic phase. The
 ** collector should never be in this state while running regular code.
@@ -1157,6 +1163,12 @@ void luaC_step (lua_State *L) {
 */
 void luaC_fullgc (lua_State *L, int isemergency) {
 #if LUA_USE_ROTABLE
+  if (mtx_initialized == 0) {
+    mtx_init(&mtx_gc, NULL, NULL, 0);
+    mtx_initialized = 1;
+  }
+
+  mtx_lock(&mtx_gc);
   lua_lock(L);
 #endif
   global_State *g = G(L);
@@ -1176,6 +1188,7 @@ void luaC_fullgc (lua_State *L, int isemergency) {
   setpause(g);
 #if LUA_USE_ROTABLE
   lua_unlock(L);
+  mtx_unlock(&mtx_gc);
 #endif
 }
 
