@@ -39,70 +39,51 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Lua RTOS, simple channel LoRa WAN gateway
- *
  */
 
 #include "sdkconfig.h"
 
-#if CONFIG_LUA_RTOS_LORA_HW_TYPE_SX1276 || CONFIG_LUA_RTOS_LORA_HW_TYPE_SX1272
+#if CONFIG_LUA_RTOS_LUA_USE_VM
 
-#include "sx1276.h"
+#include "lua.h"
+#include "lualib.h"
+#include "lauxlib.h"
+#include "error.h"
+#include "modules.h"
 
-#include <sys/driver.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/status.h>
 #include <sys/delay.h>
 
-#include <drivers/gpio.h>
-#include <drivers/spi.h>
-#include <drivers/power_bus.h>
+#include <lua/common/blocks.h>
 
-void sx1276_reset(uint8_t val) {
-	#if (CONFIG_LUA_RTOS_POWER_BUS_PIN >= 0)
-		if (val == 1) {
-			pwbus_off();
-			delay(1);
-			pwbus_on();
-		} else if (val == 0) {
-			pwbus_off();
-			delay(1);
-			pwbus_on();
-		} else {
-			delay(5);
-		}
-	#else
-		#if CONFIG_LUA_RTOS_LORA_RST >= 0
-			if (val == 1) {
-				gpio_pin_output(CONFIG_LUA_RTOS_LORA_RST);
-				gpio_pin_set(CONFIG_LUA_RTOS_LORA_RST);
-			} else if (val == 0) {
-				gpio_pin_output(CONFIG_LUA_RTOS_LORA_RST);
-				gpio_pin_clr(CONFIG_LUA_RTOS_LORA_RST);
-			} else {
-				gpio_pin_input(CONFIG_LUA_RTOS_LORA_RST);
-			}
-		#endif
-	#endif
+uint8_t lua_vm_blocks = 0;
+
+static int llua_blocks(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TBOOLEAN);
+    if (lua_toboolean(L, 1)) {
+        if (luaVB_init(L) == 0) {
+            lua_vm_blocks = 1;
+        } else {
+
+        }
+    } else {
+        lua_vm_blocks = 0;
+    }
+
+    return 0;
 }
 
-void IRAM_ATTR stx1276_read_reg(int spi_device, uint8_t addr, uint8_t *data) {
-	spi_ll_select(spi_device);
-	spi_ll_transfer(spi_device, addr & 0x7f, NULL);
-	spi_ll_transfer(spi_device, 0xff, data);
-	spi_ll_deselect(spi_device);
+static const LUA_REG_TYPE lvm_map[] = {
+  { LSTRKEY( "blocks" ), LFUNCVAL( llua_blocks    ) },
+};
+
+LUALIB_API int luaopen_vm( lua_State *L ) {
+    return 0;
 }
 
-void IRAM_ATTR stx1276_write_reg(int spi_device, uint8_t addr, uint8_t data) {
-	spi_ll_select(spi_device);
-	spi_ll_transfer(spi_device, addr | 0x80, NULL);
-	spi_ll_transfer(spi_device, data, NULL);
-	spi_ll_deselect(spi_device);
-}
-
-void IRAM_ATTR stx1276_read_buff(int spi_device, uint8_t addr, uint8_t *data, uint8_t len) {
-	spi_ll_select(spi_device);
-	spi_ll_transfer(spi_device, addr & 0x7f, NULL);
-	spi_ll_bulk_read(spi_device, len, data);
-	spi_ll_deselect(spi_device);
-}
+MODULE_REGISTER_ROM(VM, vm, lvm_map, luaopen_vm, 1);
 
 #endif
