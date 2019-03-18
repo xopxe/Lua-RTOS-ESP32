@@ -307,8 +307,12 @@ driver_error_t *net_check_connectivity() {
 driver_error_t *net_lookup(const char *name, int port, struct sockaddr_in *address) {
     driver_error_t *error;
     int rc = 0;
+    int retries = 0;
 
-    if ((error = net_check_connectivity())) return error;
+retry:
+	if (!wait_for_network(20000)) {
+        return driver_error(NET_DRIVER, NET_ERR_NOT_AVAILABLE,NULL);
+	}
 
     sa_family_t family = AF_INET;
     struct addrinfo *result = NULL;
@@ -332,6 +336,13 @@ driver_error_t *net_lookup(const char *name, int port, struct sockaddr_in *addre
 
         freeaddrinfo(result);
     } else {
+    	retries++;
+    	if (retries < 4) {
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+
+    		goto retry;
+    	}
+
         return driver_error(NET_DRIVER, NET_ERR_NAME_CANNOT_BE_RESOLVED,NULL);
     }
 
@@ -401,26 +412,32 @@ int wait_for_network(uint32_t timeout) {
 
     }
 
+    uint32_t elapsed = 0;
+    while ((!status_get(STATUS_TCPIP_INITED)) && (elapsed < timeout)) {
+        delay(1);
+        elapsed++;
+    }
+
+    if (!status_get(STATUS_TCPIP_INITED)) {
+        return 0;
+    }
+
     if (!NETWORK_AVAILABLE()) {
-        if (status_get(STATUS_WIFI_STARTED) | status_get(STATUS_SPI_ETH_STARTED) | status_get(STATUS_ETH_STARTED)) {
-            EventBits_t uxBits = xEventGroupWaitBits(
-                    netEvent,
-                    evWIFI_CONNECTED | evWIFI_CANT_CONNECT |
-                    evSPI_ETH_CONNECTED | evSPI_ETH_CANT_CONNECT |
-                    evETH_CONNECTED | evETH_CANT_CONNECT,
-                    pdTRUE, pdFALSE, ticks_to_wait
-            );
+		EventBits_t uxBits = xEventGroupWaitBits(
+				netEvent,
+				evWIFI_CONNECTED | evWIFI_CANT_CONNECT |
+				evSPI_ETH_CONNECTED | evSPI_ETH_CANT_CONNECT |
+				evETH_CONNECTED | evETH_CANT_CONNECT,
+				pdTRUE, pdFALSE, ticks_to_wait
+		);
 
-            if (uxBits & (evWIFI_CONNECTED | evSPI_ETH_CONNECTED | evETH_CONNECTED)) {
-                return 1;
-            }
+		if (uxBits & (evWIFI_CONNECTED | evSPI_ETH_CONNECTED | evETH_CONNECTED)) {
+			return 1;
+		}
 
-            if (uxBits & (evWIFI_CANT_CONNECT | evSPI_ETH_CANT_CONNECT | evETH_CANT_CONNECT)) {
-                return 0;
-            }
-        } else {
-            return 0;
-        }
+		if (uxBits & (evWIFI_CANT_CONNECT | evSPI_ETH_CANT_CONNECT | evETH_CANT_CONNECT)) {
+			return 0;
+		}
     }
 
     return 1;
@@ -433,7 +450,6 @@ driver_error_t *net_ota() {
     net_http_response_t response;
     esp_ota_handle_t update_handle = 0 ;
     uint8_t buffer[1024];
-    char *firmware;
 
     const esp_partition_t *running = esp_ota_get_running_partition();
     const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
@@ -452,26 +468,7 @@ driver_error_t *net_ota() {
 
     printf("Current firmware commit is %s\r\n", BUILD_COMMIT);
 
-    firmware = calloc(1, 3 + strlen(CONFIG_LUA_RTOS_BOARD_BRAND) + strlen(LUA_RTOS_BOARD) + strlen(CONFIG_LUA_RTOS_BOARD_SUBTYPE));
-    if (!firmware) {
-        return driver_error(NET_DRIVER, NET_ERR_NOT_ENOUGH_MEMORY,NULL);
-    }
-
-    if (strlen(CONFIG_LUA_RTOS_BOARD_BRAND) > 0) {
-        firmware = strcat(firmware, CONFIG_LUA_RTOS_BOARD_BRAND);
-        firmware = strcat(firmware, "-");
-    }
-
-    firmware = strcat(firmware, LUA_RTOS_BOARD);
-
-    if (strlen(CONFIG_LUA_RTOS_BOARD_SUBTYPE) > 0) {
-        firmware = strcat(firmware, "-");
-        firmware = strcat(firmware, CONFIG_LUA_RTOS_BOARD_SUBTYPE);
-    }
-
-    sprintf((char *)buffer, "/?firmware=%s&commit=%s", firmware, BUILD_COMMIT);
-
-    free(firmware);
+    sprintf((char *)buffer, "/?firmware=%s&commit=%s", CONFIG_LUA_RTOS_FIRMWARE, BUILD_COMMIT);
 
     if ((error = net_http_get(&client, (const char *)buffer, &response))) {
         return error;

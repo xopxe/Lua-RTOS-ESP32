@@ -28,6 +28,22 @@
 
 #if LUA_USE_ROTABLE
 #include "lrotable.h"
+
+#include <sys/syslog.h>
+
+void lua_writestringerror(const char * fmt, ...) { \
+    va_list ap;
+    va_start(ap, fmt);
+    vsyslog(LOG_ERR, fmt, ap);
+    va_end(ap);
+
+    if (! (getlogstat() & LOG_CONS)) {
+        va_start(ap, fmt);
+        vfprintf(stderr, fmt, ap);
+        va_end(ap);
+        fflush(stderr);
+    }
+}
 #endif
 
 /*
@@ -1028,14 +1044,17 @@ static void *l_alloc (void *ud, void *ptr, size_t osize, size_t nsize) {
   }
   else
 #if LUA_USE_ROTABLE
-  if (ptr)
-#endif
-    return realloc(ptr, nsize);
-#if LUA_USE_ROTABLE
-  else {
-    ptr = malloc(nsize);
-    return ptr;
+  if (ptr) {
+    void* nptr = realloc(ptr, nsize);
+    if (NULL == nptr && nsize>0)
+      free(ptr); //lua leaks this memory if we don't free it here
+    return nptr;
   }
+  else {
+    return malloc(nsize);
+  }
+#else
+    return realloc(ptr, nsize);
 #endif
 }
 

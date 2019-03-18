@@ -506,13 +506,13 @@ static int os_cpu(lua_State *L) {
 }
 
 static int os_board(lua_State *L) {
-    lua_pushstring(L, LUA_RTOS_BOARD);
+    lua_pushstring(L, CONFIG_LUA_RTOS_BOARD_TYPE);
     lua_pushstring(L, CONFIG_LUA_RTOS_BOARD_SUBTYPE);
-    lua_pushstring(L, CONFIG_LUA_RTOS_BOARD_BRAND);
+    lua_pushstring(L, "");
     return 3;
 }
 
-static int os_logcons(lua_State *L) { 
+static int os_logcons(lua_State *L) {
     if (lua_gettop(L) == 1) {
         int mask = LOG_NDELAY;
 
@@ -533,6 +533,30 @@ static int os_logcons(lua_State *L) {
         return 1;
     }
 }
+
+static int os_syslog(lua_State *L) {
+    const char *message = luaL_checkstring(L, 1);
+    int level = luaL_optinteger( L, 2, LOG_ERR );
+    syslog(level, message);
+
+    return 0;
+}
+
+#if CONFIG_LUA_RTOS_USE_RSYSLOG
+static int os_setrsyslog(lua_State *L) {
+    if (lua_gettop(L) == 1) {
+        const char *host = luaL_checkstring(L, 1);
+        const char *ret = syslog_setloghost(host);
+        if (ret == NULL) return 0;
+        lua_pushstring(L, ret);
+        return 1;
+    }
+    const char *ret = syslog_getloghost();
+    if (ret == NULL) return 0;
+    lua_pushstring(L, ret);
+    return 1;
+}
+#endif
 
 static int os_stats(lua_State *L) {
     const char *stat = luaL_optstring(L, 1, NULL);
@@ -921,6 +945,8 @@ static int os_partitions(lua_State *L) {
     char address[9];
     char size[9];
     esp_partition_iterator_t it;
+    const esp_partition_t* boot = esp_ota_get_boot_partition();
+    const esp_partition_t* running = esp_ota_get_running_partition();
 
     printf("TYPE:SUB\t ADDRESS\t  LENGTH\tENC\tLABEL\n");
 
@@ -930,7 +956,7 @@ static int os_partitions(lua_State *L) {
 
         snprintf(address, sizeof(address),"%8d", p->address);
         snprintf(size, sizeof(size),"%8d", p->size);
-        printf("0x%02x:0x%02x\t%s\t%s\t%c\t%s\n", p->type, p->subtype, address, size, p->encrypted ? 'Y':'N', p->label);
+        printf("0x%02x:0x%02x\t%s\t%s\t%c\t%s%s%s\n", p->type, p->subtype, address, size, p->encrypted ? 'Y':'N', p->label, p==boot ? " < boot":"", p==running ? " < running":"");
     }
     esp_partition_iterator_release(it);
 
@@ -1123,21 +1149,10 @@ static int os_uptime(lua_State *L) {
     return table;
 }
 
-static int os_gettime(lua_State *L) {
-
-    // Get time since last boot (no RTC)
-    struct tms tms;
-
-    times(&tms);
-    lua_Number uptime = tms.tms_stime / 1000.0;
-
-    lua_pushnumber(L, uptime);
-    return 1;
-}
-
 #if defined(MALLOC_DEBUG_H)
 static int os_rmstat(lua_State *L) {
 	RM_STAT;
 	return 0;
 }
 #endif
+
