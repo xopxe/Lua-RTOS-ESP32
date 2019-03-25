@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015 - 2018, IBEROXARXA SERVICIOS INTEGRALES, S.L.
- * Copyright (C) 2015 - 2018, Jaume Olivé Petrus (jolive@whitecatboard.org)
+ * Copyright (C) 2015 - 2019, Thomas E. Horner (whitecatboard.org@horner.it)
  *
  * All rights reserved.
  *
@@ -38,52 +38,74 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Lua RTOS, Push switch sensor
- *
  */
 
 #include "sdkconfig.h"
+#include "lua.h"
+#include "lualib.h"
+#include "lauxlib.h"
 
-#if CONFIG_LUA_RTOS_LUA_USE_SENSOR
+#include "arduino.h"
+#include <freertos/task.h>
+#include <sys/driver.h>
+#include <drivers/gpio.h>
+#include "driver/timer.h"
+#include <sys/stat.h>
+#include <sys/status.h>
+#include <sys/delay.h>
+#include "sys.h"
+#include <sys/sleep.h>
+#include <sys/syslog.h>
 
-#include <drivers/sensor.h>
-#if CONFIG_LUA_RTOS_USE_SENSOR_2P_TOGGLE_SWITCH
-
-driver_error_t *_2_pos_switch_setup(sensor_instance_t *unit);
-
-// Sensor specification and registration
-static const sensor_t __attribute__((used,unused,section(".sensors"))) _2_pos_switch_sensor = {
-    .id = "2P_TOGGLE_SWITCH",
-    .interface = {
-        {
-            .type = GPIO_INTERFACE,
-
-            .flags = SENSOR_FLAG_AUTO_ACQ | SENSOR_FLAG_ON_OFF | SENSOR_FLAG_ON_H(0) | SENSOR_FLAG_ON_L(1) |
-                     SENSOR_FLAG_DEBOUNCING | SENSOR_FLAG_DEBOUNCING_THRESHOLD(10000)
-        },
-    },
-    .data = {
-        {.id = "pos", .type = SENSOR_DATA_INT},
-    },
-    .interface_name = {"P1"},
-    .setup = _2_pos_switch_setup
-};
-
-driver_error_t *_2_pos_switch_setup(sensor_instance_t *unit) {
-    // Get initial state
-    uint8_t p = gpio_ll_pin_get(unit->setup[0].gpio.gpio);
-
-    if (p == 0) {
-        unit->data[0].integerd.value = 1;
-    } else {
-        unit->data[0].integerd.value = 0;
+void pinMode(uint8_t pin, uint8_t mode) {
+    driver_error_t *error;
+    if (INPUT == mode) {
+      if ((error = gpio_pin_input(pin))) {
+          syslog(LOG_ERR, "ERROR ON gpio_pin_input\n");
+          free(error);
+      }
     }
-
-    unit->latch[0].value.integerd.value = unit->data[0].integerd.value;
-
-    return NULL;
+    else {
+      if ((error = gpio_pin_output(pin))) {
+          syslog(LOG_ERR, "ERROR ON gpio_pin_output\n");
+          free(error);
+      }
+    }
 }
 
-#endif
-#endif
+void digitalWrite(uint8_t pin, uint8_t value) {
+    driver_error_t *error;
+    if (HIGH == value) {
+      if ((error = gpio_pin_set(pin))) {
+          syslog(LOG_ERR, "ERROR ON gpio_pin_set\n");
+          free(error);
+      }
+    }
+    else {
+      if ((error = gpio_pin_clr(pin))) {
+          syslog(LOG_ERR, "ERROR ON gpio_pin_clr\n");
+          free(error);
+      }
+    }
+}
+
+uint8_t digitalRead(uint8_t pin) {
+    uint8_t value;
+    driver_error_t *error;
+    if ((error = gpio_pin_get(pin, &value))) {
+        syslog(LOG_ERR, "ERROR ON gpio_pin_get\n");
+        free(error);
+    }
+    return value;
+}
+
+unsigned long IRAM_ATTR micros()
+{
+    return (unsigned long) esp_timer_get_time();
+}
+
+void IRAM_ATTR delayMicroseconds(uint32_t us)
+{
+    usleep(us);
+}
+

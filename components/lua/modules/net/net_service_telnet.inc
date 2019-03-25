@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2015 - 2018, IBEROXARXA SERVICIOS INTEGRALES, S.L.
- * Copyright (C) 2015 - 2018, Jaume Olivé Petrus (jolive@whitecatboard.org)
+ * Copyright (C) 2015 - 2018, Thomas E. Horner (whitecatboard.org@horner.it)
  *
  * All rights reserved.
  *
@@ -39,51 +38,53 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Lua RTOS, Push switch sensor
+ * Lua RTOS, Lua telnet net module
  *
  */
 
 #include "sdkconfig.h"
 
-#if CONFIG_LUA_RTOS_LUA_USE_SENSOR
+#if CONFIG_LUA_RTOS_USE_TELNET_SERVER
 
-#include <drivers/sensor.h>
-#if CONFIG_LUA_RTOS_USE_SENSOR_2P_TOGGLE_SWITCH
+#include "net.h"
 
-driver_error_t *_2_pos_switch_setup(sensor_instance_t *unit);
+#include "lwip/err.h"
 
-// Sensor specification and registration
-static const sensor_t __attribute__((used,unused,section(".sensors"))) _2_pos_switch_sensor = {
-    .id = "2P_TOGGLE_SWITCH",
-    .interface = {
-        {
-            .type = GPIO_INTERFACE,
+#include <drivers/net.h>
 
-            .flags = SENSOR_FLAG_AUTO_ACQ | SENSOR_FLAG_ON_OFF | SENSOR_FLAG_ON_H(0) | SENSOR_FLAG_ON_L(1) |
-                     SENSOR_FLAG_DEBOUNCING | SENSOR_FLAG_DEBOUNCING_THRESHOLD(10000)
-        },
-    },
-    .data = {
-        {.id = "pos", .type = SENSOR_DATA_INT},
-    },
-    .interface_name = {"P1"},
-    .setup = _2_pos_switch_setup
-};
+extern int telnet_start(lua_State* L);
+extern void telnet_stop();
+extern int telnet_print(lua_State* L);
 
-driver_error_t *_2_pos_switch_setup(sensor_instance_t *unit) {
-    // Get initial state
-    uint8_t p = gpio_ll_pin_get(unit->setup[0].gpio.gpio);
+static u8_t _telnet_running = 0;
 
-    if (p == 0) {
-        unit->data[0].integerd.value = 1;
-    } else {
-        unit->data[0].integerd.value = 0;
-    }
-
-    unit->latch[0].value.integerd.value = unit->data[0].integerd.value;
-
-    return NULL;
+static int ltelnet_start(lua_State* L) {
+	telnet_start(L);
+	_telnet_running = 1;
+	return 0;
 }
 
-#endif
+static int ltelnet_stop(lua_State* L) {
+	telnet_stop();
+	_telnet_running = 0;
+	return 0;
+}
+
+static int ltelnet_print(lua_State* L) {
+	return telnet_print(L);
+}
+
+static int ltelnet_running( lua_State* L ) {
+	lua_pushboolean(L, _telnet_running);
+	return 1;
+}
+
+static const LUA_REG_TYPE telnet_map[] = {
+	{ LSTRKEY( "start"   ),	 LFUNCVAL( ltelnet_start   ) },
+	{ LSTRKEY( "stop"    ),	 LFUNCVAL( ltelnet_stop    ) },
+	{ LSTRKEY( "running" ),	 LFUNCVAL( ltelnet_running ) },
+	{ LSTRKEY( "print"   ),	 LFUNCVAL( ltelnet_print   ) },
+	{ LNILKEY, LNILVAL }
+};
+
 #endif

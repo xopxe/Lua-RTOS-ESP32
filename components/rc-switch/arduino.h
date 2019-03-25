@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015 - 2018, IBEROXARXA SERVICIOS INTEGRALES, S.L.
- * Copyright (C) 2015 - 2018, Jaume Olivé Petrus (jolive@whitecatboard.org)
+ * Copyright (C) 2015 - 2019, Thomas E. Horner (whitecatboard.org@horner.it)
  *
  * All rights reserved.
  *
@@ -38,52 +38,25 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Lua RTOS, Push switch sensor
- *
  */
 
 #include "sdkconfig.h"
+#include "lua.h"
+#include "lualib.h"
+#include "lauxlib.h"
+#include <sys/driver.h>
+#include <sys/syslog.h>
+#include <drivers/gpio.h>
 
-#if CONFIG_LUA_RTOS_LUA_USE_SENSOR
+#define INPUT  0x1
+#define OUTPUT 0x0
+#define HIGH   0x1
+#define LOW    0x0
 
-#include <drivers/sensor.h>
-#if CONFIG_LUA_RTOS_USE_SENSOR_2P_TOGGLE_SWITCH
+void pinMode(uint8_t pin, uint8_t mode);
+void digitalWrite(uint8_t pin, uint8_t value);
+uint8_t digitalRead(uint8_t pin);
 
-driver_error_t *_2_pos_switch_setup(sensor_instance_t *unit);
+unsigned long IRAM_ATTR micros();
+void IRAM_ATTR delayMicroseconds(uint32_t us);
 
-// Sensor specification and registration
-static const sensor_t __attribute__((used,unused,section(".sensors"))) _2_pos_switch_sensor = {
-    .id = "2P_TOGGLE_SWITCH",
-    .interface = {
-        {
-            .type = GPIO_INTERFACE,
-
-            .flags = SENSOR_FLAG_AUTO_ACQ | SENSOR_FLAG_ON_OFF | SENSOR_FLAG_ON_H(0) | SENSOR_FLAG_ON_L(1) |
-                     SENSOR_FLAG_DEBOUNCING | SENSOR_FLAG_DEBOUNCING_THRESHOLD(10000)
-        },
-    },
-    .data = {
-        {.id = "pos", .type = SENSOR_DATA_INT},
-    },
-    .interface_name = {"P1"},
-    .setup = _2_pos_switch_setup
-};
-
-driver_error_t *_2_pos_switch_setup(sensor_instance_t *unit) {
-    // Get initial state
-    uint8_t p = gpio_ll_pin_get(unit->setup[0].gpio.gpio);
-
-    if (p == 0) {
-        unit->data[0].integerd.value = 1;
-    } else {
-        unit->data[0].integerd.value = 0;
-    }
-
-    unit->latch[0].value.integerd.value = unit->data[0].integerd.value;
-
-    return NULL;
-}
-
-#endif
-#endif
