@@ -1687,11 +1687,11 @@ menu "Lua RTOS"
 
             config LUA_RTOS_LUA_USE_APDS9960
                bool "Include APDS9960 sensor module."
-               default n
+               default y
 
             config LUA_RTOS_LUA_USE_APDS9960R
                bool "Include robotito APDS9960 sensor module."
-               default y
+               default n
 
             config LUA_RTOS_LUA_USE_OMNI
                bool "Include robotito omnidirectional control, servo"
