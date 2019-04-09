@@ -1150,18 +1150,6 @@ static int os_uptime(lua_State *L) {
     return table;
 }
 
-static int os_gettime(lua_State *L) {
-
-    // Get time since last boot (no RTC)
-    struct tms tms;
-
-    times(&tms);
-    lua_Number uptime = tms.tms_stime / 1000.0;
-
-    lua_pushnumber(L, uptime);
-    return 1;
-}
-
 static int os_time (lua_State *L);
 static int os_settime(lua_State *L) {
     time_t t = (time_t)-1;
@@ -1194,7 +1182,18 @@ static int os_settime(lua_State *L) {
     settimeofday(&tv, NULL);
 
     lua_pushinteger(L, (lua_Integer)(t));
+    return 1;
+}
 
+static int os_gettime(lua_State *L) {
+
+    // Get time since last boot (no RTC)
+    struct tms tms;
+
+    times(&tms);
+    lua_Number uptime = tms.tms_stime / 1000.0;
+
+    lua_pushnumber(L, uptime);
     return 1;
 }
 
@@ -1204,4 +1203,3 @@ static int os_rmstat(lua_State *L) {
 	return 0;
 }
 #endif
-
