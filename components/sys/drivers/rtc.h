@@ -39,31 +39,26 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Lua RTOS mutex api implementation over FreeRTOS
+ * Lua RTOS, RTC driver
  *
  */
 
-#ifndef _MUTEX_H
-#define _MUTEX_H
+#ifndef _DRIVERS_RTC_H_
+#define _DRIVERS_RTC_H_
 
-#include "sdkconfig.h"
+void rtc_mem_register_meta(uint8_t meta, size_t size);
+size_t rtc_mem_get_meta_size(uint8_t meta);
+size_t rtc_mem_size();
+size_t rtc_mem_free();
+driver_error_t *rtc_mem_push(uint8_t meta, void *val);
+driver_error_t *rtc_mem_pop(uint8_t *meta, size_t *size, void **val);
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
+// RTC errors
+#define RTC_ERR_NOT_ENOUGH_MEMORY             (DRIVER_EXCEPTION_BASE(RTC_DRIVER_ID) |  0)
+#define RTC_ERR_EMPTY_MEMORY                  (DRIVER_EXCEPTION_BASE(RTC_DRIVER_ID) |  1)
+#define RTC_ERR_TYPE_NOT_ALLOWED              (DRIVER_EXCEPTION_BASE(RTC_DRIVER_ID) |  2)
 
-struct mtx {
-    SemaphoreHandle_t lock;
-    int opts;
-};
+extern const int rtc_errors;
+extern const int rtc_error_map;
 
-#define MTX_DEF 0
-#define MTX_RECURSE 1
-
-int mtx_inited(struct mtx *mutex);
-void mtx_init(struct mtx *mutex, const char *name, const char *type, int opts);
-void mtx_lock(struct mtx *mutex);
-int  mtx_trylock(struct    mtx *mutex);
-void mtx_unlock(struct mtx *mutex);
-void mtx_destroy(struct    mtx *mutex);
-
-#endif    /* _MUTEX_H */
+#endif /* _DRIVERS_RTC_H_ */
