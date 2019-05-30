@@ -1294,6 +1294,47 @@ menu "Lua RTOS"
                 help
                     CPU affinity for the task assigned to the RC-Switch listen thread.
          endmenu
+         
+         menu "VL53L0X"
+          config VL53L0X_I2C_CHANNEL
+                int "i2c channel to use for VL53*"
+                range 0 1
+                default 0
+                help
+                    I2C port where VL53L0X is attached
+
+            config VL53L0X_SPEED
+                int "VL53L0X I2C port speed"
+                range 100000 3400000
+                default 400000
+                help
+                    I2C port speed in hertz
+        endmenu
+
+        menu "APDS9960"
+            config APDS9960_I2C_CHANNEL
+               int "i2c channel to use for APDS9960"
+               range 0 1
+               default 0
+               help
+                  I2C port where APDS9960 is attached
+
+            config APDS9960_SPEED
+               int "APDS9960 I2C port speed"
+               range 100000 3400000
+               default 400000
+               help
+                 I2C port speed in hertz
+        endmenu
+        
+        menu "Encoder"
+            config ENCODER_THREAD_STACK_SIZE
+                int "Stack for Encoder callback in bytes"
+                range 1024 40960
+                default 4096
+                help
+                    Stack for Encoder callback in bytes     
+        endmenu
 
       endmenu
 
@@ -1722,35 +1763,6 @@ menu "Lua RTOS"
             config LUA_RTOS_LUA_USE_DRV8833
                bool "Include DRV8833 driver"
                default y
-
-            config VL53L0X_I2C_CHANNEL
-               int "i2c channel to use for VL53*"
-               range 0 1
-               default 0
-               help
-                  I2C port where VL53L0X is attached
-
-            config VL53L0X_SPEED
-               int "VL53L0X I2C port speed"
-               range 100000 3400000
-               default 400000
-               help
-                 I2C port speed in hertz
-
-
-            config APDS9960_I2C_CHANNEL
-               int "i2c channel to use for APDS9960"
-               range 0 1
-               default 0
-               help
-                  I2C port where APDS9960 is attached
-
-            config APDS9960_SPEED
-               int "APDS9960 I2C port speed"
-               range 100000 3400000
-               default 400000
-               help
-                 I2C port speed in hertz
 
             config LUA_RTOS_LUA_USE_THREAD
                bool "Include thread module in build"
