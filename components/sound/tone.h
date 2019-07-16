@@ -39,41 +39,48 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Lua RTOS, gpio debouncing routines
+ * Lua RTOS, tone library
  *
  */
 
-#ifndef _GPIO_DEBOUNCING_H_
-#define _GPIO_DEBOUNCING_H_
+#ifndef _SOUND_TONE_H_
+#define _SOUND_TONE_H_
 
-#include <sys/mutex.h>
+#include <stdint.h>
 
-#include <drivers/cpu.h>
+#include <sound/tone_pwm.h>
+#include <sound/tone_dac.h>
 
-typedef void (*gpio_debouncing_callback_t)(void *, uint8_t);
+#include <sys/driver.h>
+
+typedef driver_error_t *(*tone_setup_t)(void *, void **);
+typedef void (*tone_unsetup_t)(void **);
+typedef driver_error_t *(*tone_play_t)(void **, uint32_t, uint32_t);
+typedef driver_error_t *(*set_volume_t)(void **, float);
+
+typedef enum {
+	ToneGeneratorPWM = 1,
+	ToneGeneratorDAC = 2,
+	ToneGeneratorMAX
+} tone_gen_t;
+
+typedef union {
+	tone_pwm_config_t pwm;
+	tone_dac_config_t dac;
+} tone_gen_config_t;
 
 typedef struct {
-	uint64_t mask;  	///< Mask. If bit i = 1 on mask, internal GPIO(i) is debounced
-	uint64_t latch; 	///< Internal latch values
+	void **h;
+	tone_unsetup_t _unsetup;
+	tone_play_t    _play;
+	set_volume_t   _set_volume;
+} tone_gen_device_t;
 
-#if EXTERNAL_GPIO
-	uint64_t mask_ext;  ///< Mask. If bit i = 1 on mask, external GPIO(i) is debounced
-	uint64_t latch_ext; ///< External latch values
-#endif
+typedef tone_gen_device_t *tone_gen_device_h_t;
 
-	uint16_t threshold[CPU_LAST_GPIO + 1]; ///< Threshold values, in timer period units
-	uint16_t time[CPU_LAST_GPIO + 1];      ///< Time counter for GPIO
+driver_error_t *tone_setup(tone_gen_t, tone_gen_config_t *, tone_gen_device_h_t *);
+driver_error_t *tone_unsetup(tone_gen_device_h_t *);
+driver_error_t *tone_play(tone_gen_device_h_t *, uint32_t, uint32_t);
+driver_error_t *tone_set_volume(tone_gen_device_h_t *h, float volume);
 
-	gpio_debouncing_callback_t callback[CPU_LAST_GPIO + 1]; ///< Callback for GPIO
-	void *arg[CPU_LAST_GPIO + 1]; // Callback args
-	struct mtx mtx;
-} debouncing_t;
-
-// Period for debouncing timer, in microseconds
-#define GPIO_DEBOUNCING_PERIOD 20
-
-driver_error_t *gpio_debouncing_register(uint8_t pin, uint16_t threshold, gpio_debouncing_callback_t callback, void *args);
-driver_error_t *gpio_debouncing_unregister(uint8_t pin);
-void gpio_debouncing_force_isr(void *args);
-
-#endif /* _GPIO_DEBOUNCING_H_ */
+#endif /* _SOUND_TONE_H_ */

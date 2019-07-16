@@ -39,41 +39,73 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Lua RTOS, gpio debouncing routines
+ * Lua RTOS, tone PWM library
  *
  */
 
-#ifndef _GPIO_DEBOUNCING_H_
-#define _GPIO_DEBOUNCING_H_
+#include "sound.h"
 
-#include <sys/mutex.h>
+#include <drivers/pwm.h>
 
-#include <drivers/cpu.h>
+#include <sys/delay.h>
 
-typedef void (*gpio_debouncing_callback_t)(void *, uint8_t);
+/*
+ * Operation functions
+ */
+driver_error_t *tone_pwm_setup(tone_pwm_config_t *config, tone_pwm_device_h_t *h) {
+	// Allocate space for device handle
+	*h = calloc(1, sizeof(tone_pwm_device_t));
 
-typedef struct {
-	uint64_t mask;  	///< Mask. If bit i = 1 on mask, internal GPIO(i) is debounced
-	uint64_t latch; 	///< Internal latch values
+	if (!*h) {
+		return driver_error(SOUND_DRIVER, SOUND_ERR_NOT_ENOUGH_MEMORY, NULL);
+	}
 
-#if EXTERNAL_GPIO
-	uint64_t mask_ext;  ///< Mask. If bit i = 1 on mask, external GPIO(i) is debounced
-	uint64_t latch_ext; ///< External latch values
-#endif
+	// To generate sound we will use a square PWM signal with 50% duty
+	driver_error_t *error = pwm_setup(config->unit, -1, config->pin, 440, 0.5, &(*h)->channel);
+	if (error) {
+		tone_pwm_unsetup(h);
+		return error;
+	}
 
-	uint16_t threshold[CPU_LAST_GPIO + 1]; ///< Threshold values, in timer period units
-	uint16_t time[CPU_LAST_GPIO + 1];      ///< Time counter for GPIO
+	(*h)->unit = config->unit;
 
-	gpio_debouncing_callback_t callback[CPU_LAST_GPIO + 1]; ///< Callback for GPIO
-	void *arg[CPU_LAST_GPIO + 1]; // Callback args
-	struct mtx mtx;
-} debouncing_t;
+	return NULL;
+}
 
-// Period for debouncing timer, in microseconds
-#define GPIO_DEBOUNCING_PERIOD 20
+void tone_pwm_unsetup(tone_pwm_device_h_t *h) {
+	if (!*h) return;
 
-driver_error_t *gpio_debouncing_register(uint8_t pin, uint16_t threshold, gpio_debouncing_callback_t callback, void *args);
-driver_error_t *gpio_debouncing_unregister(uint8_t pin);
-void gpio_debouncing_force_isr(void *args);
+	pwm_unsetup((*h)->unit, (*h)->channel);
+	free(*h);
+	*h= NULL;
+}
 
-#endif /* _GPIO_DEBOUNCING_H_ */
+driver_error_t *tone_pwm_play(tone_pwm_device_h_t *h, uint32_t freq, uint32_t duration) {
+	if (!*h) {
+		return driver_error(SOUND_DRIVER, SOUND_ERR_NO_TONE_GEN, NULL);
+	}
+
+	// Set frequency, duty is set at 50% in tone_setup call
+	driver_error_t *error = pwm_set_freq((*h)->unit, (*h)->channel, freq);
+	if (error) {
+		return error;
+	}
+
+	// Start PWM generation
+	error = pwm_start((*h)->unit, (*h)->channel);
+	if (error) {
+		return error;
+	}
+
+	// Wait for duration
+	delay(duration);
+
+	// Stop PWM generation
+	error = pwm_stop((*h)->unit, (*h)->channel);
+	if (error) {
+		return error;
+	}
+
+	return NULL;
+}
+
