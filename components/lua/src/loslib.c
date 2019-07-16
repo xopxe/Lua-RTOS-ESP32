@@ -443,11 +443,6 @@ static int os_difftime (lua_State *L) {
   return 1;
 }
 
-static int os_restart (lua_State *L) {
-  esp_restart();
-  return 1;
-}
-
 /* }====================================================== */
 
 
@@ -540,8 +535,7 @@ static const LUA_REG_TYPE syslib[] =
   { LSTRKEY( "bootcount" ),   LFUNCVAL( os_bootcount ) },
   { LSTRKEY( "flashEUI" ),    LFUNCVAL( os_flash_unique_id ) },
   { LSTRKEY( "edit" ),        LFUNCVAL( os_edit ) },
-  { LSTRKEY( "restart" ),        LFUNCVAL( os_restart ) },
-  
+
   { LSTRKEY( "LOG_INFO" ),    LINTVAL( LOG_INFO    ) },
   { LSTRKEY( "LOG_EMERG" ),   LINTVAL( LOG_EMERG   ) },
   { LSTRKEY( "LOG_ALERT" ),   LINTVAL( LOG_ALERT   ) },
