@@ -39,41 +39,99 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Lua RTOS, gpio debouncing routines
+ * Lua RTOS, tone library
  *
  */
 
-#ifndef _GPIO_DEBOUNCING_H_
-#define _GPIO_DEBOUNCING_H_
+#include "sound.h"
 
-#include <sys/mutex.h>
+#include <sys/driver.h>
 
-#include <drivers/cpu.h>
+driver_error_t *tone_setup(tone_gen_t gen, tone_gen_config_t *config, tone_gen_device_h_t *h) {
+	driver_error_t *error;
 
-typedef void (*gpio_debouncing_callback_t)(void *, uint8_t);
+	// Sanity checks
+	if ((gen < ToneGeneratorPWM) || (gen >= ToneGeneratorMAX)) {
+		return driver_error(SOUND_DRIVER, SOUND_ERR_INVALID_TONE_GEN, NULL);
+	}
 
-typedef struct {
-	uint64_t mask;  	///< Mask. If bit i = 1 on mask, internal GPIO(i) is debounced
-	uint64_t latch; 	///< Internal latch values
+	// Allocate space for device handle
+	*h = calloc(1, sizeof(tone_gen_device_t));
+	if (!*h) {
+		return driver_error(SOUND_DRIVER, SOUND_ERR_NOT_ENOUGH_MEMORY, NULL);
+	}
 
-#if EXTERNAL_GPIO
-	uint64_t mask_ext;  ///< Mask. If bit i = 1 on mask, external GPIO(i) is debounced
-	uint64_t latch_ext; ///< External latch values
-#endif
+	// Setup tone generator
+	switch (gen) {
+		case ToneGeneratorPWM:
+			(*h)->_unsetup = (tone_unsetup_t)tone_pwm_unsetup;
+			(*h)->_play = (tone_play_t)tone_pwm_play;
+			(*h)->_set_volume = NULL;
 
-	uint16_t threshold[CPU_LAST_GPIO + 1]; ///< Threshold values, in timer period units
-	uint16_t time[CPU_LAST_GPIO + 1];      ///< Time counter for GPIO
+			error = tone_pwm_setup(&config->pwm, (tone_pwm_device_h_t *)(&(*h)->h));
+			if (error) {
+				tone_unsetup(h);
+			}
 
-	gpio_debouncing_callback_t callback[CPU_LAST_GPIO + 1]; ///< Callback for GPIO
-	void *arg[CPU_LAST_GPIO + 1]; // Callback args
-	struct mtx mtx;
-} debouncing_t;
+			break;
 
-// Period for debouncing timer, in microseconds
-#define GPIO_DEBOUNCING_PERIOD 20
+		case ToneGeneratorDAC:
+			(*h)->_unsetup = (tone_unsetup_t)tone_dac_unsetup;
+			(*h)->_play = (tone_play_t)tone_dac_play;
+			(*h)->_set_volume = (set_volume_t)tone_dac_set_volume;
 
-driver_error_t *gpio_debouncing_register(uint8_t pin, uint16_t threshold, gpio_debouncing_callback_t callback, void *args);
-driver_error_t *gpio_debouncing_unregister(uint8_t pin);
-void gpio_debouncing_force_isr(void *args);
+			error = tone_dac_setup(&config->dac, (tone_dac_device_h_t *)(&(*h)->h));
+			if (error) {
+				tone_unsetup(h);
+			}
 
-#endif /* _GPIO_DEBOUNCING_H_ */
+			break;
+
+		case ToneGeneratorMAX:
+			break;
+	}
+
+	// Set default volume
+	tone_set_volume(h, 1.0);
+
+	return NULL;
+}
+
+driver_error_t *tone_unsetup(tone_gen_device_h_t *h) {
+	if (!*h) return NULL;
+
+	(*h)->_unsetup((void **)(&((*h)->h)));
+	free(*h);
+	*h = NULL;
+
+	return NULL;
+}
+
+driver_error_t *tone_set_volume(tone_gen_device_h_t *h, float volume) {
+	if (!*h) {
+		return driver_error(SOUND_DRIVER, SOUND_ERR_NO_TONE_GEN, NULL);
+	}
+
+	if ((volume < 0) || (volume > 1)) {
+		return driver_error(SOUND_DRIVER, SOUND_ERR_NO_INVALID_VOLUME, NULL);
+	}
+
+	if ((*h)->_set_volume) {
+		(*h)->_set_volume((void **)(&((*h)->h)), volume);
+	}
+
+	return NULL;
+}
+
+driver_error_t *tone_play(tone_gen_device_h_t *h, uint32_t freq, uint32_t duration) {
+	if (!*h) {
+		return driver_error(SOUND_DRIVER, SOUND_ERR_NO_TONE_GEN, NULL);
+	}
+
+	driver_error_t *error = (*h)->_play((void **)(&(*h)->h), freq, duration);
+	if (error) {
+		return error;
+	}
+
+	return NULL;
+}

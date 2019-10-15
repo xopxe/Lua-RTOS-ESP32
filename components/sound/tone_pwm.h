@@ -39,41 +39,31 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Lua RTOS, gpio debouncing routines
+ * Lua RTOS, tone PWM library
  *
  */
 
-#ifndef _GPIO_DEBOUNCING_H_
-#define _GPIO_DEBOUNCING_H_
+#ifndef _TONE_PWM_H_
+#define _TONE_PWM_H_
 
-#include <sys/mutex.h>
+#include <stdint.h>
 
-#include <drivers/cpu.h>
-
-typedef void (*gpio_debouncing_callback_t)(void *, uint8_t);
+#include <sys/driver.h>
 
 typedef struct {
-	uint64_t mask;  	///< Mask. If bit i = 1 on mask, internal GPIO(i) is debounced
-	uint64_t latch; 	///< Internal latch values
+	int8_t unit;
+	int8_t channel;
+} tone_pwm_device_t;
 
-#if EXTERNAL_GPIO
-	uint64_t mask_ext;  ///< Mask. If bit i = 1 on mask, external GPIO(i) is debounced
-	uint64_t latch_ext; ///< External latch values
-#endif
+typedef tone_pwm_device_t *tone_pwm_device_h_t;
 
-	uint16_t threshold[CPU_LAST_GPIO + 1]; ///< Threshold values, in timer period units
-	uint16_t time[CPU_LAST_GPIO + 1];      ///< Time counter for GPIO
+typedef struct {
+	int8_t pin;
+	int8_t unit;
+} tone_pwm_config_t;
 
-	gpio_debouncing_callback_t callback[CPU_LAST_GPIO + 1]; ///< Callback for GPIO
-	void *arg[CPU_LAST_GPIO + 1]; // Callback args
-	struct mtx mtx;
-} debouncing_t;
+driver_error_t *tone_pwm_setup(tone_pwm_config_t *config, tone_pwm_device_h_t *device);
+void tone_pwm_unsetup(tone_pwm_device_h_t *device);
+driver_error_t *tone_pwm_play(tone_pwm_device_h_t *device, uint32_t freq, uint32_t duration);
 
-// Period for debouncing timer, in microseconds
-#define GPIO_DEBOUNCING_PERIOD 20
-
-driver_error_t *gpio_debouncing_register(uint8_t pin, uint16_t threshold, gpio_debouncing_callback_t callback, void *args);
-driver_error_t *gpio_debouncing_unregister(uint8_t pin);
-void gpio_debouncing_force_isr(void *args);
-
-#endif /* _GPIO_DEBOUNCING_H_ */
+#endif /* _TONE_PWM_H_ */
