@@ -91,6 +91,7 @@ FILE *lua_stdout_file = NULL;
 void luaC_fullgc (lua_State *L, int isemergency) ;
 int edit_main(int argc, char *argv[]);
 extern int os_get_random(unsigned char *buf, size_t len);
+int settimeofday(const struct timeval *, const struct timezone *);
 
 static int os_stdout(lua_State *L) {
     int total = lua_gettop(L);
@@ -145,14 +146,21 @@ static int os_edit (lua_State *L) {
     }
 
     // Create file if does not exists
-    FILE *fp = fopen(path, "a");
+    bool bCreated = false;
+    FILE *fp = fopen(path, "r");
     if (!fp) {
-        return luaL_fileresult(L, 0, path);
+        bCreated = true;
+        fp = fopen(path, "a");
+        if (!fp) {
+            return luaL_fileresult(L, 0, path);
+        }
     }
     fclose(fp);
   
     char* lua_argv[] = {(char *)"edit", (char *)path, NULL};
-    edit_main(2, lua_argv);
+    if (1 == edit_main(2, lua_argv) && bCreated) {
+        unlink(path);
+    }
     console_clear();
     return 0;
 }
@@ -578,7 +586,7 @@ static int os_stats(lua_State *L) {
     return 0;
 }
 
-static int os_format(lua_State *L) {
+int os_format(lua_State *L) {
     const char *path = luaL_checkstring(L, 1);
 
     const struct mount_pt *mountp;
@@ -611,6 +619,25 @@ static int os_format(lua_State *L) {
 
     printf("%s can't be formatted\r\n", path);
 
+    return 0;
+}
+
+int os_df(lua_State *L) {
+    const char *path = luaL_optstring(L, 1, "/");
+    const struct mount_pt *mountp;
+
+    if ((mountp = mount_get_mount_point_for_path(path))) {
+        if (mountp->fsstat) {
+            uint32_t total, used;
+            if (0 == mountp->fsstat(path, &total, &used)) {
+                lua_pushinteger(L, total-used); // free
+                lua_pushinteger(L, total);      // total
+                return 2;
+            }
+        }
+    }
+
+    printf("can't get free space of %s\r\n", path);
     return 0;
 }
 
@@ -729,10 +756,6 @@ static int os_run (lua_State *L) {
     }
 
     from_uart = 1;
-    code = (char *)calloc(1,1024);
-    if (!code) {
-        luaL_error(L, "not enough memory");
-    }
 
     lua_pop(L, 1);
 
@@ -763,10 +786,9 @@ static int os_run (lua_State *L) {
 
         code = realloc(code, code_size + chunk_size + 1);
         if (!code) {
-            free(code);
             uart_ll_set_raw(0);
             uart_ll_unlock(CONSOLE_UART);
-            luaL_error(L, "not enough memory");
+            return luaL_error(L, "not enough memory");
         }
 
         // Read chunk
@@ -810,25 +832,13 @@ skip:
         return luaL_error(L, lua_tostring(L, -1));
     }
 
-#if 0
-    lua_remove(L, -1);
-
-    lua_getglobal(L, "thread");
-    lua_getfield(L, -1, "start");
-
-    lua_remove(L, -2);  // Remove "thread" from the stack
-    lua_insert(L, -2);  // Switch "thread" with parsed function
-#endif
-
+    // Call to function
     status = lua_pcall(L, 1, 0, 0);
     if (status != LUA_OK) {
         if (code && from_uart) free(code);
         return luaL_error(L, lua_tostring(L, -1));
     }
 
-#if 0
-    lua_pop(L, 1);
-#endif
 
     if (code && from_uart) free(code);
 

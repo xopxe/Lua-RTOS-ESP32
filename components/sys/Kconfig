@@ -408,7 +408,7 @@ menu "Lua RTOS"
                     Task priority assigned to SSH thread.
 
             config LUA_RTOS_SSH_SERVER_TASK_CPU
-                depends on !FREERTOS_UNICORE
+                depends on !FREERTOS_UNICORE && LUA_RTOS_USE_SSH_SERVER
                 int "SSH task CPU affinity"
                 range 0 1
                 default 1
@@ -432,7 +432,7 @@ menu "Lua RTOS"
                     Task priority assigned to SSH thread.
 
             config LUA_RTOS_SSH_SHELL_TASK_CPU
-                depends on !FREERTOS_UNICORE
+                depends on !FREERTOS_UNICORE && LUA_RTOS_USE_SSH_SERVER
                 int "SSH task CPU affinity"
                 range 0 1
                 default 1
@@ -486,7 +486,7 @@ menu "Lua RTOS"
                     Task priority assigned to HTTP thread.
 
             config LUA_RTOS_HTTP_SERVER_TASK_CPU
-                depends on !FREERTOS_UNICORE
+                depends on !FREERTOS_UNICORE && LUA_RTOS_USE_HTTP_SERVER
                 int "HTTP task CPU affinity"
                 range 0 1
                 default 1
@@ -547,7 +547,7 @@ menu "Lua RTOS"
                     Task priority assigned to TELNET thread.
 
             config LUA_RTOS_TELNET_SERVER_TASK_CPU
-                depends on !FREERTOS_UNICORE
+                depends on !FREERTOS_UNICORE && LUA_RTOS_USE_TELNET_SERVER
                 int "TELNET task CPU affinity"
                 range 0 1
                 default 1
@@ -739,6 +739,9 @@ menu "Lua RTOS"
             config EXTERNAL_GPIO_NONE
                bool "None"
 
+            config GPIO_MCP23S17
+               bool "MCP23S17, 16 IO"
+
             config GPIO_PCA9698
                bool "PCA9698, 40 IO, no pull-up"
 
@@ -746,6 +749,38 @@ menu "Lua RTOS"
                bool "PCA9505, 40 IO, pull-up"
          endchoice
 
+         config MCP23S17_SPI_PORT
+             depends on GPIO_MCP23S17
+                int "MCP23S17 SPI port"
+                range 2 3
+                default 3
+                help
+                   SPI port where MCP23S17 is attached
+             
+         config MCP23S17_SPI_CS
+             depends on GPIO_MCP23S17
+                int "MCP23S17 CS pin"
+                range 0 39
+                default 4
+                help
+                    The GPIO port number used to select MCP23S17.
+
+         config MCP23S17_INTA
+             depends on GPIO_MCP23S17
+                int "MCP23S17 INTA pin"
+                range -1 39
+                default 35
+                help
+                    The GPIO port number used to connect the INTA pin. Use -1 if INTA is not connected.
+
+         config MCP23S17_INTB
+             depends on GPIO_MCP23S17
+                int "MCP23S17 INTB pin"
+                range -1 39
+                default 5
+                help
+                    The GPIO port number used to connect the INTB pin. Use -1 if INTB is not connected.
+                     
          config PCA9xxx_I2C
             depends on (GPIO_PCA9698 || GPIO_PCA9505)
                int "PCA9xxx I2C port"
@@ -1609,6 +1644,10 @@ menu "Lua RTOS"
             config LUA_RTOS_LUA_USE_CRC
                bool "Include crc module in build"
                default y
+
+            config LUA_RTOS_LUA_USE_MD5
+               bool "Include md5 module in build"
+               default y
          endmenu
 
          menu "Lua RTOS Modules"
@@ -1621,7 +1660,7 @@ menu "Lua RTOS"
                default y
 
             config LUA_RTOS_LUA_USE_BT
-               bool "Include bluetooh module in build"
+               bool "Include bluetooth module in build"
                default y
 
             config LUA_RTOS_LUA_USE_CAN
@@ -1717,6 +1756,10 @@ menu "Lua RTOS"
 
             config LUA_RTOS_LUA_USE_SOCKET
                bool "Include socket module in build"
+               default y
+
+            config LUA_RTOS_LUA_USE_SOUND
+               bool "Include sound module in build"
                default y
 
             config LUA_RTOS_LUA_USE_SPI
