@@ -76,11 +76,12 @@ SF3dVector& SF3dVector::operator *= (float r)
     z*=r;
     return *this;
 }
+
 SF3dVector& SF3dVector::operator /= (float r)
 {
     x/=r;
     y/=r;
-    z/=r; 
+    z/=r;
     return *this;
 }
 float SF3dVector::operator* (const SF3dVector &v)	//dot product
@@ -89,7 +90,7 @@ float SF3dVector::operator* (const SF3dVector &v)	//dot product
 }
 SF3dVector CrossProduct (const SF3dVector &u, const SF3dVector &v)
 {
-	return SF3dVector(u.y*v.z - u.z*v.y, 
+	return SF3dVector(u.y*v.z - u.z*v.y,
                       u.z*v.x - u.x*v.z,
                       u.x*v.y - u.y*v.x);
 }

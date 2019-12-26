@@ -61,6 +61,13 @@ typedef struct {
 
 } servo_t;
 
+typedef struct {
+    float x;
+    float y;
+    float phi;
+
+} odom_t;
+
 float Kp = 0.0;
 float Ki = 0.0;
 float Kd = 0.0;
@@ -69,27 +76,53 @@ float KF = 1.0;
 float Rad_per_tick = 0.0;
 float Wheel_diameter = 0.0;
 float m_per_sec_to_tics_per_sec = 1.0;
+int cont_c = 1;
 
 float Max_output = 100.0;
+
+int odom_period_factor = 1.0;
 
 TimerHandle_t motor_control_timer;
 
 int encoder_lua_callback = LUA_NOREF;
+int direct_kinematic_lua_callback = LUA_NOREF;
 
 static servo_t motors[NMOTORS];
+
+static odom_t odometry;
+float tics_motores[NMOTORS];
+
 float robot_r;
 
 SF3dVector static getW(float x_dot, float y_dot, float w_dot, float phi_r){
 	SF3dVector v(x_dot, y_dot, w_dot);
-
+  float pi_3 = PI/3;
 	SF3dMatrix M(
 		-sin(phi_r),         cos(phi_r),        robot_r,
-		-sin(PI/3 - phi_r), -cos(PI/3 - phi_r), robot_r,
-		 sin(PI/3 + phi_r), -cos(PI/3 + phi_r), robot_r
+		-sin(pi_3 - phi_r), -cos(pi_3 - phi_r), robot_r,
+		 sin(pi_3 + phi_r), -cos(pi_3 + phi_r), robot_r
 	);
 
 	SF3dVector w = M*v;
 	return w;
+}
+
+SF3dVector static getInverseW(float w_1, float w_2, float w_3, float phi){
+
+	SF3dVector x(w_1 *Wheel_diameter, w_2 *Wheel_diameter, w_3 *Wheel_diameter);
+
+  float pi_6 = PI/6;
+  float dostercios = 2.0/3;
+  float robot_r_3 = robot_r/3;
+
+	SF3dMatrix A(
+    -sin(phi)*dostercios , -cos(pi_6 + phi)*dostercios, cos(phi - pi_6)*dostercios,
+		cos(phi)*dostercios  , -sin(pi_6 + phi)*dostercios, sin(phi - pi_6)*dostercios,
+		robot_r_3            , robot_r_3                  , robot_r_3
+	);
+
+	SF3dVector u = A*x;
+	return u;
 }
 
 /*
@@ -110,14 +143,17 @@ int static pulse_from_angle(float a) {
 static void motor_control_callback(TimerHandle_t xTimer) {
 //FIXME implementar PID
 
+
     for (int i=0; i<NMOTORS; i++) {
     //for (int i=2; i<NMOTORS; i++) {
         servo_t *m = &(motors[i]);
 
         //compute v (m/s)
-        float current_v = m->counter / OMNI_CTRL_TIMER;  // tics/s
+        float current_v  = m->counter / OMNI_CTRL_TIMER;  // tics/s
+        tics_motores[i] += m->counter;
         //printf("motor %i, tics: %i, current_v: %f\n", i, m->counter, current_v);
         m->counter = 0;
+
 
         float error = m->target_v - current_v;
         float accum_error = m->accum_error+error;
@@ -136,14 +172,14 @@ static void motor_control_callback(TimerHandle_t xTimer) {
         m->output += Ki * accum_error;
         m->output += Kd * (error - m->prev_error);
 
-        if (m->output>Max_output) { 
+        if (m->output>Max_output) {
             m->output=Max_output;
         } else if (m->output<-Max_output) {
             m->output=-Max_output;
         } else {
             m->accum_error = accum_error; // only here, for windup protection
         }
-            
+
 
         m->prev_error = error;
 
@@ -152,10 +188,59 @@ static void motor_control_callback(TimerHandle_t xTimer) {
         // m->driver->setMotorSpeed(m->output);
     }
 
-
     for (int i=0; i<NMOTORS; i++) {
         motors[i].driver->setMotorSpeed(motors[i].output);
     }
+
+    cont_c++;
+
+    lua_State *TL;
+    lua_State *L;
+    int tref;
+
+    if ((direct_kinematic_lua_callback != LUA_NOREF) && (cont_c % odom_period_factor == 0)) {
+      odom_t *o = &(odometry);
+
+      SF3dVector odom_vels = getInverseW(tics_motores[0]*Rad_per_tick, tics_motores[1]*Rad_per_tick, tics_motores[2]*Rad_per_tick, o->phi);
+
+      o->x += odom_vels.x;
+      o->y += odom_vels.y;
+      o->phi += odom_vels.z;
+
+      cont_c = 0; // reseteo el contador para respetar la cantidad de controles.
+
+      // reseteo contadores
+      tics_motores[0] = 0;
+      tics_motores[1] = 0;
+      tics_motores[2] = 0;
+
+      //Devuelvo la odometria
+      L = pvGetLuaState();
+      TL = lua_newthread(L);
+
+      tref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+      lua_rawgeti(L, LUA_REGISTRYINDEX, direct_kinematic_lua_callback);
+      lua_xmove(L, TL, 1);
+      lua_pushnumber(TL, o->x);
+      lua_pushnumber(TL, o->y);
+      lua_pushnumber(TL, o->phi);   //*Rad_per_tick
+      lua_pushnumber(TL, odom_vels.x);
+      lua_pushnumber(TL, odom_vels.y);
+      lua_pushnumber(TL, odom_vels.z);
+      int status = lua_pcall(TL, 6, 0, 0);
+      luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+      if (status != LUA_OK) {
+        const char *msg = lua_tostring(TL, -1);
+          //luaL_error(TL, msg);
+        lua_writestringerror("error in odometry callback %s\n", msg);
+        lua_pop(TL, 1);
+      }
+
+    }
+
+
 /*
     for (int i=0; i<NMOTORS; i++) {
         bool dirty = false;
@@ -181,34 +266,34 @@ static void motor_control_callback(TimerHandle_t xTimer) {
 static void callback_enc_func(int i_encoder, int8_t dir, uint32_t counter, uint8_t button) {
     //printf("motor %i, dir %i, counter %i\n", i_encoder, dir, counter);
     motors[i_encoder].counter+=dir;
-    
+
     lua_State *TL;
-	lua_State *L;
-	int tref;
+  	lua_State *L;
+  	int tref;
 
-	if (encoder_lua_callback != LUA_NOREF) {
-	
-	    L = pvGetLuaState();
-	    TL = lua_newthread(L);
+  	if (encoder_lua_callback != LUA_NOREF) {
 
-	    tref = luaL_ref(L, LUA_REGISTRYINDEX);
+  	    L = pvGetLuaState();
+  	    TL = lua_newthread(L);
 
-	    lua_rawgeti(L, LUA_REGISTRYINDEX, encoder_lua_callback);
-	    lua_xmove(L, TL, 1);
-        lua_pushinteger(TL, i_encoder+1);
-        lua_pushinteger(TL, dir);
-        lua_pushinteger(TL, counter);   //*Rad_per_tick
-	    int status = lua_pcall(TL, 3, 0, 0);
-        luaL_unref(TL, LUA_REGISTRYINDEX, tref);
-        
-        if (status != LUA_OK) {
-	    	const char *msg = lua_tostring(TL, -1);
-        	//luaL_error(TL, msg);
-    		lua_writestringerror("error in encoder callback %s\n", msg);
-		    lua_pop(TL, 1);		
-        }
-	}
-    
+  	    tref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+  	    lua_rawgeti(L, LUA_REGISTRYINDEX, encoder_lua_callback);
+  	    lua_xmove(L, TL, 1);
+          lua_pushinteger(TL, i_encoder+1);
+          lua_pushinteger(TL, dir);
+          lua_pushinteger(TL, counter);   //*Rad_per_tick
+  	    int status = lua_pcall(TL, 3, 0, 0);
+          luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+          if (status != LUA_OK) {
+  	    	const char *msg = lua_tostring(TL, -1);
+          	//luaL_error(TL, msg);
+      		lua_writestringerror("error in encoder callback %s\n", msg);
+  		    lua_pop(TL, 1);
+          }
+  	}
+
 }
 
 
@@ -243,8 +328,11 @@ static int omni_init (lua_State *L) {
 
         printf(" done\r\n");
         motors[i].target_v=0;
+        tics_motores[i] = 0;
     }
-
+    odometry.x = 0;
+    odometry.y = 0;
+    odometry.phi = 0;
     // motor_control_timer = xTimerCreate("omni_hbridge", 1000*OMNI_CTRL_TIMER / portTICK_PERIOD_MS, pdTRUE,
     //                         (void *)motor_control_timer, callback_sw_func);
     /*xTimerStart(motor_control_timer, 0);*/
@@ -355,7 +443,7 @@ static int omni_drive (lua_State *L) {
     motors[0].target_v = w.x * m_per_sec_to_tics_per_sec;
     motors[1].target_v = w.y * m_per_sec_to_tics_per_sec;
     motors[2].target_v = w.z * m_per_sec_to_tics_per_sec;
-    
+
     motors[0].accum_error = 0;
     motors[1].accum_error = 0;
     motors[2].accum_error = 0;
@@ -376,6 +464,22 @@ static int omni_set_encoder_callback( lua_State* L ) {
     return 1;
 }
 
+static int omni_set_odometry_callback( lua_State* L ) {
+	if (lua_isfunction(L, 1)) {
+		luaL_checktype(L, 1, LUA_TFUNCTION);
+    odom_period_factor = luaL_optnumber(L, 2, 10); // Number of periods to publish odom.
+    odometry.x = luaL_optnumber(L, 3, 0.0);
+    odometry.y = luaL_optnumber(L, 4, 0.0);
+    odometry.phi = luaL_optnumber(L, 5, 0.0);
+		lua_pushvalue(L, 1);
+		direct_kinematic_lua_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+	} else {
+		direct_kinematic_lua_callback = LUA_NOREF;
+	}
+
+    return 1;
+}
+
 
 static const luaL_Reg omni_hbridge[] = {
 //	{"attach", lvl53l0x_attach},
@@ -386,12 +490,13 @@ static const luaL_Reg omni_hbridge[] = {
 	{"set_enable", omni_set_enable},
 	{"set_raw", omni_set_raw},
 	{"set_pid", omni_set_pid},
-    {"set_max_output", omni_set_max_output},
-    {"set_set_rad_per_tick", omni_set_rad_per_tick},
-    {"set_set_wheel_diameter", omni_set_wheel_diameter},
-    {"set_encoder_callback", omni_set_encoder_callback},
+  {"set_max_output", omni_set_max_output},
+  {"set_set_rad_per_tick", omni_set_rad_per_tick},
+  {"set_set_wheel_diameter", omni_set_wheel_diameter},
+  {"set_encoder_callback", omni_set_encoder_callback},
+  {"set_odometry_callback",omni_set_odometry_callback},
 
-    {NULL, NULL}
+  {NULL, NULL}
 };
 
 LUALIB_API int luaopen_omni_hbridge( lua_State *L ) {
