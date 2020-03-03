@@ -75,6 +75,7 @@ float KF = 1.0;
 
 float Rad_per_tick = 0.0;
 float Wheel_diameter = 0.0;
+float Wheel_radius = 0.0;
 float m_per_sec_to_tics_per_sec = 1.0;
 int cont_c = 1;
 
@@ -109,11 +110,11 @@ SF3dVector static getW(float x_dot, float y_dot, float w_dot, float phi_r){
 
 SF3dVector static getInverseW(float w_1, float w_2, float w_3, float phi){
 
-	SF3dVector x(w_1 *Wheel_diameter, w_2 *Wheel_diameter, w_3 *Wheel_diameter);
+	SF3dVector x(w_1 *Wheel_radius, w_2 *Wheel_radius, w_3 *Wheel_radius);
 
   float pi_6 = PI/6;
   float dostercios = 2.0/3;
-  float robot_r_3 = robot_r/3;
+  float robot_r_3 = 1.0/(robot_r*3);
 
 	SF3dMatrix A(
     -sin(phi)*dostercios , -cos(pi_6 + phi)*dostercios, cos(phi - pi_6)*dostercios,
@@ -182,8 +183,9 @@ static void motor_control_callback(TimerHandle_t xTimer) {
 
 
         m->prev_error = error;
-
-        //printf("motor %i, target_v %f, current_v %f, output %f, error %f \n",i, m->target_v, current_v, m->output, error);
+        // if (i == 1){
+        //   printf("motor %i, target_v %f, current_v %f, output %f, error %f \n",i, m->target_v, current_v, m->output, error);
+        // }
 
         // m->driver->setMotorSpeed(m->output);
     }
@@ -413,14 +415,15 @@ static int omni_set_pid (lua_State *L) {
 
 static int omni_set_rad_per_tick (lua_State *L) {
     Rad_per_tick = luaL_optnumber( L, 1, 1.0 );
-    m_per_sec_to_tics_per_sec = 1/(Rad_per_tick * Wheel_diameter);
+    m_per_sec_to_tics_per_sec = 1/(Rad_per_tick * Wheel_radius);
     lua_pushboolean(L, true);
 	return 1;
 }
 
 static int omni_set_wheel_diameter (lua_State *L) {
     Wheel_diameter = luaL_optnumber( L, 2, 0.038);
-    m_per_sec_to_tics_per_sec = 1/(Rad_per_tick * Wheel_diameter);
+    Wheel_radius = Wheel_diameter /2;
+    m_per_sec_to_tics_per_sec = 1/(Rad_per_tick * Wheel_radius);
     lua_pushboolean(L, true);
 	return 1;
 }
@@ -438,7 +441,7 @@ static int omni_drive (lua_State *L) {
     float phi = luaL_optnumber( L, 4, 0.0 );
 
     SF3dVector w = getW(x_dot, y_dot, w_dot, phi);
-    //printf("omni computed vel %f %f %f\r\n", w.x, w.y, w.z);
+    //printf("omni computed vel 1 %f %f \r\n", w.x, w.x * m_per_sec_to_tics_per_sec);
 
     motors[0].target_v = w.x * m_per_sec_to_tics_per_sec;
     motors[1].target_v = w.y * m_per_sec_to_tics_per_sec;
