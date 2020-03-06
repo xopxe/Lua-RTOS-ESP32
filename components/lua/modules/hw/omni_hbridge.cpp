@@ -202,8 +202,8 @@ static void motor_control_callback(TimerHandle_t xTimer) {
 
     if ((direct_kinematic_lua_callback != LUA_NOREF) && (cont_c % odom_period_factor == 0)) {
       odom_t *o = &(odometry);
-
-      SF3dVector odom_vels = getInverseW(tics_motores[0]*Rad_per_tick, tics_motores[1]*Rad_per_tick, tics_motores[2]*Rad_per_tick, o->phi);
+      float tics_to_rad_s = Rad_per_tick/(OMNI_CTRL_TIMER*odom_period_factor);
+      SF3dVector odom_vels = getInverseW(tics_motores[0]*tics_to_rad_s, tics_motores[1]*tics_to_rad_s, tics_motores[2]*tics_to_rad_s, o->phi);
 
       o->x += odom_vels.x;
       o->y += odom_vels.y;
