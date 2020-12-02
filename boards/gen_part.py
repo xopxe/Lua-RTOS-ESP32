@@ -141,7 +141,7 @@ app_offset = flash_size - (max_app_size * app_partitions)
 
 unused =  app_offset - offset
 if unused:
-  print "unused     0x%08x\t0x%08x  % 5dK" % (offset, unused, unused / 1024)
+  print("unused     0x%08x\t0x%08x  % 5dK" % (offset, unused, unused / 1024))
 
 # Generate the partition table
 f = open(args.LUA_RTOS_PARTION_CSV,"w") 
