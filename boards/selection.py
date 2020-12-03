@@ -1,6 +1,6 @@
 #
-# Copyright (C) 2015 - 2018, IBEROXARXA SERVICIOS INTEGRALES, S.L.
-# Copyright (C) 2015 - 2018, Jaume Olive Petrus (jolive@whitecatboard.org)
+# Copyright (C) 2015 - 2020, IBEROXARXA SERVICIOS INTEGRALES, S.L.
+# Copyright (C) 2015 - 2020, Jaume Olive Petrus (jolive@whitecatboard.org)
 #
 # All rights reserved.
 #
@@ -74,7 +74,11 @@ for i, board in enumerate(boards, 1):
     sys.stderr.write("  %2d: %s\r\n" % (i, board["description"]))
 
 sys.stderr.write("\r\nSelected board: ")    
-sboard = raw_input()
+try:
+    sboard = raw_input()  # raw_input renamed to input in Python 3
+except NameError:
+    sboard = input()
+
 
 if not sboard.isdigit():
     sys.stderr.write("Invalid board selection\r\n")
@@ -98,7 +102,10 @@ for j, firmware in enumerate(board["firmwares"], 1):
     sys.stderr.write("  %2d: %s\r\n" % (j, firmware["description"]))
       
 sys.stderr.write("\r\nSelected firmware: ")    
-firm = raw_input()
+try:
+    firm = raw_input()  # raw_input renamed to input in Python 3
+except NameError:
+    firm = input()
   
 if not firm.isdigit():
     sys.stderr.write("Invalid board firmware\r\n")
