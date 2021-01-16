@@ -126,7 +126,7 @@ typedef struct {
     uint8_t flags;
     uint32_t regs[14];
     spi_device_handle_t h;
-} spi_device_t;
+} _spi_device_t;
 
 typedef struct {
     SemaphoreHandle_t mtx; // Recursive mutex for access the bus
@@ -140,7 +140,7 @@ typedef struct {
     int8_t clk;
 
     // Spi devices attached to the bus
-    spi_device_t device[SPI_BUS_DEVICES];
+    _spi_device_t device[SPI_BUS_DEVICES];
 } spi_bus_t;
 
 spi_bus_t *get_spi_info();

@@ -1369,6 +1369,15 @@ menu "Lua RTOS"
                  I2C port speed in hertz
         endmenu
         
+        menu "PIXY2"
+            config PIXY2_SPI_CLOCKRATE 
+        	int "SPI clock rate"
+        	range 0 80000000
+        	default 2000000
+        	help
+        	  SPI clock rate in hertz
+        endmenu
+                
         menu "Encoder"
             config ENCODER_THREAD_STACK_SIZE
                 int "Stack for Encoder callback in bytes"
@@ -1692,7 +1701,7 @@ menu "Lua RTOS"
             config LUA_RTOS_LUA_USE_CURL_NET
                depends on LUA_RTOS_LUA_USE_NET
                bool "Include curl support in net module"
-               default y
+               default n
 
             config LUA_RTOS_LUA_USE_ENCODER
                bool "Include encoder module in build"
@@ -1708,7 +1717,7 @@ menu "Lua RTOS"
 
             config LUA_RTOS_LUA_USE_GDISPLAY
                bool "Include gdisplay module in build"
-               default y
+               default n
 
             config LUA_RTOS_LUA_USE_I2C
                bool "Include i2c module in build"
@@ -1788,7 +1797,7 @@ menu "Lua RTOS"
             config LUA_RTOS_LUA_USE_SCP_NET
                depends on LUA_RTOS_LUA_USE_NET
                bool "Include scp support in net module"
-               default y
+               default n
 
             config LUA_RTOS_LUA_USE_SDISPLAY
                bool "Include Segment Display module in build"
@@ -1796,7 +1805,7 @@ menu "Lua RTOS"
 
             config LUA_RTOS_LUA_USE_STEPPER
                bool "Include stepper module in build"
-               default y
+               default n
 
             config LUA_RTOS_LUA_USE_VL53L0X
                bool "Include VL53L0X sensor module."
@@ -1804,15 +1813,19 @@ menu "Lua RTOS"
 
             config LUA_RTOS_LUA_USE_VL53RING
                bool "Include VL53L0X based ring"
-               default y
+               default n
 
             config LUA_RTOS_LUA_USE_APDS9960
                bool "Include APDS9960 sensor module."
-               default y
+               default n
 
             config LUA_RTOS_LUA_USE_APDS9960R
                bool "Include robotito APDS9960 sensor module."
                default n
+               
+            config LUA_RTOS_LUA_USE_PIXY2
+               bool "Include Pixy2 sensor module."
+               default y
 
             config LUA_RTOS_LUA_USE_OMNI
                bool "Include robotito omnidirectional control, servo"
@@ -1820,7 +1833,7 @@ menu "Lua RTOS"
 
             config LUA_RTOS_LUA_USE_OMNIHBRIDGE
                bool "Include robotito omnidirectional control, H-bridge"
-               default y
+               default n
 
             config LUA_RTOS_LUA_USE_DRV8833
                bool "Include DRV8833 driver"
