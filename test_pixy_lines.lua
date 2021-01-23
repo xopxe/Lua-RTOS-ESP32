@@ -1,9 +1,9 @@
 pixy = require 'pixy2'
 pixy.init()
 
-p = function(lines, intersects, bars)
-for i, ll in ipairs(lines or {}) do
-print('line '..i..' ('..ll.x0..','..ll.y0..')->('..ll.x1..','..ll.y1..') '..ll.index..' '..tostring(ll.has_intersection))
+p = function(vector, intersects, bars)
+if vector then 
+print('vector ('..vector.x0..','..vector.y0..')->('..vector.x1..','..vector.y1..') '..vector.index)
 end
 
 for i, ii in ipairs(intersects or {}) do

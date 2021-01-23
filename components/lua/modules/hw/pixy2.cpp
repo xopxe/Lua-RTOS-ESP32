@@ -191,6 +191,7 @@ static void callback_line_get_features(TimerHandle_t xTimer) {
         stdio = 1;
     }
 
+    // single vector mode
 	int8_t ret = p2line.getMainFeatures(cb_lines_features, true);
 
     int status;
@@ -205,7 +206,7 @@ static void callback_line_get_features(TimerHandle_t xTimer) {
             lua_xmove(L, TL, 1);
 
             if (cb_lines_features & LINE_VECTOR) {
-				lua_createtable(TL, p2line.numVectors, 0);
+				/*lua_createtable(TL, p2line.numVectors, 0);
 				for (uint8_t i = 0; i < p2line.numVectors; i++) {
 					Vector vector = p2line.vectors[i];
 					//vector.print();
@@ -227,6 +228,27 @@ static void callback_line_get_features(TimerHandle_t xTimer) {
 
 					lua_settable(TL, -3);
 				}
+				*/
+            		if (p2line.numVectors>0) {
+						Vector vector = p2line.vectors[0];
+						//vector.print();
+
+						lua_createtable(TL, 0, 5);
+						lua_pushinteger(TL, vector.m_x0);
+						lua_setfield(TL, -2, "x0");
+						lua_pushinteger(TL, vector.m_y0);
+						lua_setfield(TL, -2, "y0");
+						lua_pushinteger(TL, vector.m_x1);
+						lua_setfield(TL, -2, "x1");
+						lua_pushinteger(TL, vector.m_y1);
+						lua_setfield(TL, -2, "y1");
+						lua_pushinteger(TL, vector.m_index);
+						lua_setfield(TL, -2, "index");
+						//lua_pushboolean(TL, vector.m_flags & LINE_FLAG_INTERSECTION_PRESENT);
+						//lua_setfield(TL, -2, "has_intersection");
+            		} else {
+                    	lua_pushnil(TL);
+                    }
             }else{
             	lua_pushnil(TL);
             }
