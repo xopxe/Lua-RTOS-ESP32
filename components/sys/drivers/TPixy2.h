@@ -80,7 +80,9 @@
 #include "Pixy2Video.h"
 */
 
-#include "Pixy2SPI_SS.h"
+//#include "Pixy2SPI_SS.h"
+//#include "Pixy2I2C.h"
+#include "Pixy2UART.h"
 
 struct Version
 {
@@ -241,7 +243,7 @@ int16_t TPixy2::getSync()
 
 int16_t TPixy2::recvPacket()
 {
-  uint16_t csCalc, csSerial;
+  uint16_t csCalc=0, csSerial;
   int16_t res;
   
   res = getSync();
