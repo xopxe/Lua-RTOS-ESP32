@@ -260,13 +260,13 @@ static void callback_line_get_features(TimerHandle_t xTimer) {
 					//intersection.print();
 
 					lua_pushinteger(TL, i+1);
-					lua_createtable(TL, 0, 4);
+					lua_createtable(TL, 0, 3);
 					lua_pushinteger(TL, intersection.m_x);
 					lua_setfield(TL, -2, "x");
 					lua_pushinteger(TL, intersection.m_y);
 					lua_setfield(TL, -2, "y");
-					lua_pushinteger(TL, intersection.m_n);
-					lua_setfield(TL, -2, "n");
+					//lua_pushinteger(TL, intersection.m_n);
+					//lua_setfield(TL, -2, "n");
 
 					lua_createtable(TL, intersection.m_n, 0);
 
