@@ -182,9 +182,9 @@ endif
 
 ifeq ("$(VERSION_CHECK_REQUIRED)","1")
   # Check if esp-idf installation contains the required version to build Lua RTOS
-  ifeq ("$(shell cd $(IDF_PATH) && git log --pretty="%H" | grep $(CURRENT_IDF))","")
-  $(error Please, run "make upgrade-idf" before, to upgrade esp-idf to the version required by Lua RTOS)
-  endif
+  #ifeq ("$(shell cd $(IDF_PATH) && git log --pretty="%H" | grep $(CURRENT_IDF))","")
+  #$(error Please, run "make upgrade-idf" before, to upgrade esp-idf to the version required by Lua RTOS)
+  #endif
 
   # Apply Lua RTOS patches
   ifneq ("$(shell test -e $(IDF_PATH)/lua_rtos_patches && echo ex)","ex")

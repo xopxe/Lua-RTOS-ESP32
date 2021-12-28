@@ -12,7 +12,7 @@
 //
 // end license header
 //
-// Arduino SPI with slave select link class
+// UART
 
 #ifndef _PIXY2UART_H
 #define _PIXY2UART_H

@@ -12,7 +12,7 @@
 //
 // end license header
 //
-// Arduino SPI with slave select link class
+// I2C
 
 #ifndef _PIXY2I2C_H
 #define _PIXY2I2C_H

@@ -80,9 +80,10 @@
 #include "Pixy2Video.h"
 */
 
-//#include "Pixy2SPI_SS.h"
+#include "Pixy2SPI_SS.h"
+//#include "Pixy2ICSP.h"
 //#include "Pixy2I2C.h"
-#include "Pixy2UART.h"
+//#include "Pixy2UART.h"
 
 struct Version
 {

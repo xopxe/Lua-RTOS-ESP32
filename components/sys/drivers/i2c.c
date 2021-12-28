@@ -695,7 +695,7 @@ driver_error_t *i2c_read(int deviceid, int *transaction, char *data, int len) {
     if (len > 1) {
         i2c_master_read(cmd, (uint8_t *) data, len, I2C_MASTER_LAST_NACK);
     } else {
-        i2c_master_read_byte(cmd, (uint8_t *) data, I2C_MASTER_ACK);
+        i2c_master_read_byte(cmd, (uint8_t *) data, I2C_MASTER_LAST_NACK);  //FIXME xop was I2C_MASTER_ACK);
     }
 
     i2c_unlock(unit);
