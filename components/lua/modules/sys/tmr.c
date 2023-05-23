@@ -314,6 +314,21 @@ static int ltmr_gc (lua_State *L) {
     return 0;
 }
 
+static int ltmr_gettime(lua_State *L){ 
+  lua_pushnumber(L, ((double)esp_timer_get_time()/1000000));
+  return 1; 
+}
+
+static int ltmr_gettimems(lua_State *L){ 
+  lua_pushnumber(L, ((double)esp_timer_get_time()/1000));
+  return 1; 
+}
+
+static int ltmr_gettimeus(lua_State *L){ 
+  lua_pushnumber(L, (esp_timer_get_time()));
+  return 1; 
+}
+
 static const LUA_REG_TYPE tmr_timer_map[] = {
     { LSTRKEY( "start"       ),     LFUNCVAL( ltmr_start    ) },
     { LSTRKEY( "stop"        ),     LFUNCVAL( ltmr_stop     ) },
@@ -332,6 +347,9 @@ static const LUA_REG_TYPE tmr_map[] = {
     { LSTRKEY( "sleep"       ),     LFUNCVAL( ltmr_sleep    ) },
     { LSTRKEY( "sleepms"     ),     LFUNCVAL( ltmr_sleep_ms ) },
     { LSTRKEY( "sleepus"     ),     LFUNCVAL( ltmr_sleep_us ) },
+    { LSTRKEY( "gettime"     ),     LFUNCVAL( ltmr_gettime  ) },
+    { LSTRKEY( "gettimems"   ),     LFUNCVAL( ltmr_gettimems) },
+    { LSTRKEY( "gettimeus"   ),     LFUNCVAL( ltmr_gettimeus) },
     TMR_TMR0
     TMR_TMR1
     TMR_TMR2
