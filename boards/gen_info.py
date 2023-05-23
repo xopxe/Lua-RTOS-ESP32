@@ -81,7 +81,7 @@ with open("boards/boards_compat.json") as json_data:
     try:
         compat = json.load(json_data)
     except:
-        print "Error reading boards/boards_compat.json: %s" % (sys.exc_info()[1])
+        print("Error reading boards/boards_compat.json: %s" % (sys.exc_info()[1]))
         exit(1)
 
     json_data.close()
@@ -90,7 +90,7 @@ with open("boards/supported_boards.json") as json_data:
     try:
         boards = json.load(json_data)
     except:
-        print "Error reading boards/supported_boards.json: %s" % (sys.exc_info()[1])
+        print("Error reading boards/supported_boards.json: %s" % (sys.exc_info()[1]))
         exit(1)
     
     json_data.close()
@@ -151,7 +151,7 @@ for i, board in enumerate(boards, 1):
             kconfigf.write("      config LUA_RTOS_FIRMWARE_%s\r\n" % (firmware["id"].replace("-","_")))
             kconfigf.write("         bool \"%s\"\r\n\r\n" % (firmware["description"]))
         else:
-            print "Duplicated firmware id %s" % (firmware["id"])
+            print("Duplicated firmware id %s" % (firmware["id"]))
             exit(1)
             
 includef.write("#endif")

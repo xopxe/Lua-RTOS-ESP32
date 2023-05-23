@@ -392,5 +392,20 @@
                 "filesystem": "default"
             }
         ]
+    },
+    {
+        "description": "Robotito SparkFun ESP32 Thing",
+        "manufacturer": "SparkFun",
+        "image": "http://git.whitecatboard.org/esp32-thing.jpg",
+        "usb_vid_pid": "0403:6015",
+        "usb_port_exp": "",
+        "firmwares": [
+            {
+                "id": "ROBOTITO-ESP32-THING",
+                "description": "Robotito SparkFun ESP32 Thing",
+                "filesystem": "default"
+            }
+        ]
     }
+
 ]
