@@ -96,8 +96,8 @@ bool VL53L0X::init(bool io_2v8)
   driver_error_t *error;
 
 
-	uint8_t i2c = CONFIG_VL53L0X_I2C_CHANNEL;
-	if ((error=i2c_attach(i2c, I2C_MASTER, CONFIG_VL53L0X_SPEED, 0, 0, &i2cdevice))) {
+  uint8_t i2c = CONFIG_VL53L0X_I2C_CHANNEL;
+  if ((error=i2c_attach(i2c, I2C_MASTER, CONFIG_VL53L0X_SPEED, 0, 0, &i2cdevice))) {
     	i2c_util_print_driver_error(error, -10);
     	return false;
   }
