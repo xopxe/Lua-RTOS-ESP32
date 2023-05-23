@@ -1,0 +1,6 @@
+export PATH=$PATH:$HOME/esp/xtensa-esp32-elf/bin;
+export IDF_PATH=~/esp/esp-idf;
+export LIBRARY_PATH=$HOME/.espressif/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/bin;
+export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/lib/pkgconfig/";
+export CPATH="tools/xtensa-esp32-elf/1.22.0-80-g6c4433a-5.2.0/:$CPATH";
+
