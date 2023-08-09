@@ -640,8 +640,8 @@ static int apds9960_color_enable (lua_State *L) {
  *   1. struct with RGB color (source)
  *   2. pointer to struct HSV color (target)
  * Notes:
- *   - r, g, b values are from 0..255
- *   - h = [0,360], s = [0,255], v = [0,255]
+ *   - r, g, b values are 16bits
+ *   - h = [0,360], s = 16bits, v = 16bits
  *   - NB: if s == 0, then h = 0 (undefined)
  ******************************************************************************/
 static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV){
@@ -658,7 +658,7 @@ static void RGB2HSV(struct RGB_set RGB, struct HSV_set &HSV){
     delta = max - min;          // 16bit, < v
 
     if( max != 0 )
-        HSV.s = (int)(delta)*2^16 / max;        // s, 16bit
+        HSV.s = (uint32_t)(delta)*2^16 / max;        // s, 16bit
     else {
         // r = g = b = 0        // s = 0, v is undefined
         HSV.s = 0;
