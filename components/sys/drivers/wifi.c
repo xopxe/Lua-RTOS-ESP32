@@ -340,7 +340,7 @@ driver_error_t *wifi_setup(wifi_mode_t mode, char *ssid, char *password, uint32_
 
         wifi_config.ap.ssid_len = 0;
         wifi_config.ap.channel = (channel ? channel : 1);
-        wifi_config.ap.authmode = (*password ? WIFI_AUTH_WPA_WPA2_PSK : WIFI_AUTH_OPEN);
+        wifi_config.ap.authmode = (*password ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN);
         wifi_config.ap.ssid_hidden = hidden;
         wifi_config.ap.max_connection = 4;
         wifi_config.ap.beacon_interval = 100;
