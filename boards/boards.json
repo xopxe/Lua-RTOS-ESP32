@@ -496,7 +496,7 @@
         "description": "Robotito SparkFun ESP32 Thing",
         "manufacturer": "SparkFun",
         "brand": "",
-        "type": "ROBOTITO-ESP32-THING",
+        "type": "ROBOTITOESP32THING",
         "subtype": "",
         "filesystem": "default",
         "usb_vid_pid": "0403:6015",

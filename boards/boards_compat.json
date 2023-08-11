@@ -80,6 +80,11 @@
 		"subtype": "OTA"
 	},
 	{
+		"id": "ROBOTITO-ESP32-THING",
+		"type": "ROBOTITOESP32THING",
+		"subtype": ""
+	},
+	{
 		"id": "ADAFRUIT-HUZZAH32",
 		"type": "HUZZAH32",
 		"subtype": ""
