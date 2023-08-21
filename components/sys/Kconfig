@@ -1837,6 +1837,10 @@ menu "Lua RTOS"
             config LUA_RTOS_LUA_USE_DRV8833
                bool "Include DRV8833 driver"
                default y
+               
+            config LUA_RTOS_LUA_USE_RFID
+               bool "Include RFID reader driver"
+               default y
 
             config LUA_RTOS_LUA_USE_THREAD
                bool "Include thread module in build"
