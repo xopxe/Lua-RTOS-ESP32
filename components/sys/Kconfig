@@ -1838,8 +1838,8 @@ menu "Lua RTOS"
                bool "Include DRV8833 driver"
                default y
                
-            config LUA_RTOS_LUA_USE_RFID
-               bool "Include RFID reader driver"
+            config LUA_RTOS_LUA_USE_ROBOTITO_BLE
+               bool "Include robotito BLE driver"
                default y
 
             config LUA_RTOS_LUA_USE_THREAD

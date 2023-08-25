@@ -39,11 +39,11 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Lua RTOS, Lua rfid module *
+ * Lua RTOS, Lua robotito BLE module *
  */
  
 #include "sdkconfig.h"
-#if CONFIG_LUA_RTOS_LUA_USE_RFID
+#if CONFIG_LUA_RTOS_LUA_USE_ROBOTITO_BLE
 
 #include <stdio.h>
 #include <string.h>
@@ -56,27 +56,26 @@
 #include "error.h"
 #include "sys.h"
 #include "modules.h"
-//#include "rfid.h"
 #include "luartos.h"
 
 
-static int rfid_init (lua_State *L) {
-  printf("initializing rfid\n");
-  lua_pushstring(L, "init rfid");
+static int rble_init (lua_State *L) {
+  printf("initializing rble\n");
+  lua_pushstring(L, "init rble");
   lua_pushboolean(L, true);
   return 2;
 }
 
-static const luaL_Reg rfid[] = {
-  {"init", rfid_init},
+static const luaL_Reg rble[] = {
+  {"init", rble_init},
   {NULL, NULL}
 };
 
-LUALIB_API int luaopen_rfid( lua_State *L ) {
-    luaL_newlib(L, rfid);
+LUALIB_API int luaopen_rble( lua_State *L ) {
+    luaL_newlib(L, rble);
     return 1;
 }
 
-MODULE_REGISTER_RAM(RFID, rfid, luaopen_rfid, 1);
+MODULE_REGISTER_RAM(ROBOTITO_BLE, rble, luaopen_rble, 1);
 
 #endif
