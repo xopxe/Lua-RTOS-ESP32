@@ -448,11 +448,8 @@ static void spp_uart_init(void)
     //Set UART pins
     uart_set_pin(UART_NUM_1, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     //Install UART driver, and get the queue.
-    printf("!!!spp_uart_init1\n");
     uart_driver_install(UART_NUM_1, 4096, 8192, 10,&spp_uart_queue,0);
-    printf("!!!spp_uart_init2\n");
     xTaskCreate(uart_task, "uTask", 2048, (void*)UART_NUM_1, 8, NULL);
-    printf("!!!spp_uart_init3\n");
 }
 
 #ifdef SUPPORT_HEARTBEAT
@@ -497,9 +494,7 @@ void spp_cmd_task(void * arg)
 
 static void spp_task_init(void)
 {
-    printf("!!!spp_task_init1\n");
     spp_uart_init();
-    printf("!!!spp_task_init2\n");
 
 #ifdef SUPPORT_HEARTBEAT
     cmd_heartbeat_queue = xQueueCreate(10, sizeof(uint32_t));
@@ -507,9 +502,7 @@ static void spp_task_init(void)
 #endif
 
     cmd_cmd_queue = xQueueCreate(10, sizeof(uint32_t));
-    printf("!!!spp_task_init3\n");
     xTaskCreate(spp_cmd_task, "spp_cmd_task", 2048, NULL, 10, NULL);
-    printf("!!!spp_task_init4\n");
 }
 
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
