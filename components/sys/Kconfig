@@ -1842,6 +1842,10 @@ menu "Lua RTOS"
                bool "Include robotito BLE driver"
                default y
 
+            config LUA_RTOS_LUA_USE_ROBOTITO_BLECLI
+               bool "Include robotito BLE test client"
+               default y
+               
             config LUA_RTOS_LUA_USE_THREAD
                bool "Include thread module in build"
                default y
