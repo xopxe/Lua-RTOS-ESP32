@@ -692,8 +692,40 @@ static int robotito_blecli_init (lua_State *L) {
     return 1;
 }
 
+static int robotito_blecli_send (lua_State *L) {
+	printf("robotito_blecli send\n");
+
+	size_t length;
+	const uint8_t *string = (uint8_t *) luaL_checklstring(L, 1, &length);
+
+///////////////////////////////////////+
+    uint8_t *temp = (uint8_t *)malloc(sizeof(uint8_t)*length);
+    
+    if(temp == NULL){
+        ESP_LOGE(GATTC_TAG, "malloc failed,%s L#%d\n", __func__, __LINE__);
+        lua_pushnil(L);
+        lua_pushstring(L, "malloc failed");
+    }
+    memcpy(temp,string,length);
+                    
+    esp_ble_gattc_write_char( spp_gattc_if,
+                              spp_conn_id,
+                              (db+SPP_IDX_SPP_DATA_RECV_VAL)->attribute_handle,
+                              length,
+                              temp,
+                              ESP_GATT_WRITE_TYPE_RSP,
+                              ESP_GATT_AUTH_REQ_NONE);
+    free(temp);
+///////////////////////////////////////-
+
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+
 static const luaL_Reg robotito_blecli[] = {
     {"init", robotito_blecli_init},
+    {"send", robotito_blecli_send},
     {NULL, NULL}
 };
 

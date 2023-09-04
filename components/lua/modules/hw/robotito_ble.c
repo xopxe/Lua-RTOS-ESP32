@@ -671,7 +671,6 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 }
 
 
-
 static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param)
 {
     ESP_LOGI(GATTS_TABLE_TAG, "EVT %d, gatts if %d\n", event, gatts_if);
@@ -698,6 +697,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
         }
     } while (0);
 }
+
 
 static int robotito_ble_init (lua_State *L) {
 	printf("initializing robotito_ble\n");
@@ -756,8 +756,85 @@ static int robotito_ble_init (lua_State *L) {
     return 1;
 }
 
+static int robotito_ble_send (lua_State *L) {
+	printf("robotito_ble send\n");
+	
+    uint8_t total_num = 0;
+    uint8_t current_num = 0;
+    
+	size_t length;
+	const uint8_t *string = (uint8_t *) luaL_checklstring(L, 1, &length);
+
+///////////////////////////////////////+
+    uint8_t * temp = NULL;
+    uint8_t * ntf_value_p = NULL;
+    
+    temp = (uint8_t *)malloc(sizeof(uint8_t)*length);
+    
+    if(temp == NULL){
+        ESP_LOGE(GATTS_TABLE_TAG, "%s malloc.1 failed\n", __func__);
+        lua_pushnil(L);
+        lua_pushstring(L, "malloc.1 failed");
+    }
+    memcpy(temp,string,length);
+
+    if(!enable_data_ntf){
+        ESP_LOGE(GATTS_TABLE_TAG, "%s do not enable data Notify\n", __func__);
+        lua_pushnil(L);
+        lua_pushstring(L, "do not enable data Notify");
+        return 2;
+    }
+
+    if(length <= (spp_mtu_size - 3)){
+        esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],length, temp, false);
+    }else if(length > (spp_mtu_size - 3)){
+        if((length%(spp_mtu_size - 7)) == 0){
+            total_num = length/(spp_mtu_size - 7);
+        }else{
+            total_num = length/(spp_mtu_size - 7) + 1;
+        }
+        current_num = 1;
+        ntf_value_p = (uint8_t *)malloc((spp_mtu_size-3)*sizeof(uint8_t));
+        if(ntf_value_p == NULL){
+            ESP_LOGE(GATTS_TABLE_TAG, "%s malloc.2 failed\n", __func__);
+            free(temp);
+            lua_pushnil(L);
+            lua_pushstring(L, "malloc.2 failed");
+            return 2;
+        }
+        
+        while(current_num <= total_num){
+            if(current_num < total_num){
+                ntf_value_p[0] = '#';
+                ntf_value_p[1] = '#';
+                ntf_value_p[2] = total_num;
+                ntf_value_p[3] = current_num;
+                memcpy(ntf_value_p + 4,temp + (current_num - 1)*(spp_mtu_size-7),(spp_mtu_size-7));
+                esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],(spp_mtu_size-3), ntf_value_p, false);
+            }else if(current_num == total_num){
+                ntf_value_p[0] = '#';
+                ntf_value_p[1] = '#';
+                ntf_value_p[2] = total_num;
+                ntf_value_p[3] = current_num;
+                memcpy(ntf_value_p + 4,temp + (current_num - 1)*(spp_mtu_size-7),(length - (current_num - 1)*(spp_mtu_size - 7)));
+                esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],(length - (current_num - 1)*(spp_mtu_size - 7) + 4), ntf_value_p, false);
+            }
+            vTaskDelay(20 / portTICK_PERIOD_MS);
+            current_num++;
+        }
+        free(ntf_value_p);
+    }
+    free(temp);
+///////////////////////////////////////-
+
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+
 static const luaL_Reg robotito_ble[] = {
     {"init", robotito_ble_init},
+    {"send", robotito_ble_send},
     {NULL, NULL}
 };
 
