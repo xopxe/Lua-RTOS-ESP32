@@ -45,6 +45,8 @@
 #include "sdkconfig.h"
 #if CONFIG_LUA_RTOS_LUA_USE_ROBOTITO_BLE
 
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
+
 #include "lua.h"
 #include "lualib.h"
 #include "lauxlib.h"
