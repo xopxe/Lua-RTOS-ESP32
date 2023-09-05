@@ -41,11 +41,9 @@
  *
  * Lua RTOS, Lua robotito BLE module *
  */
- 
+
 #include "sdkconfig.h"
 #if CONFIG_LUA_RTOS_LUA_USE_ROBOTITO_BLE
-
-#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 
 #include "lua.h"
 #include "lualib.h"
@@ -54,12 +52,13 @@
 #include "sys.h"
 #include "modules.h"
 #include "luartos.h"
+#include <sys/syslog.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp_system.h"
-#include "esp_log.h"
+//#include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_bt.h"
 #include "driver/uart.h"
@@ -307,7 +306,7 @@ static bool store_wr_buffer(esp_ble_gatts_cb_param_t *p_data)
     temp_spp_recv_data_node_p1 = (spp_receive_data_node_t *)malloc(sizeof(spp_receive_data_node_t));
 
     if(temp_spp_recv_data_node_p1 == NULL){
-        ESP_LOGI(GATTS_TABLE_TAG, "malloc error %s %d\n", __func__, __LINE__);
+        syslog(LOG_INFO, "malloc error %s %d\n", __func__, __LINE__);
         return false;
     }
     if(temp_spp_recv_data_node_p2 != NULL){
@@ -372,17 +371,17 @@ void uart_task(void *pvParameters)
                     uint8_t * ntf_value_p = NULL;
 #ifdef SUPPORT_HEARTBEAT
                     if(!enable_heart_ntf){
-                        ESP_LOGE(GATTS_TABLE_TAG, "%s do not enable heartbeat Notify\n", __func__);
+                        syslog(LOG_ERR, "%s do not enable heartbeat Notify\n", __func__);
                         break;
                     }
 #endif
                     if(!enable_data_ntf){
-                        ESP_LOGE(GATTS_TABLE_TAG, "%s do not enable data Notify\n", __func__);
+                        syslog(LOG_ERR, "%s do not enable data Notify\n", __func__);
                         break;
                     }
                     temp = (uint8_t *)malloc(sizeof(uint8_t)*event.size);
                     if(temp == NULL){
-                        ESP_LOGE(GATTS_TABLE_TAG, "%s malloc.1 failed\n", __func__);
+                        syslog(LOG_ERR, "%s malloc.1 failed\n", __func__);
                         break;
                     }
                     memset(temp,0x0,event.size);
@@ -398,7 +397,7 @@ void uart_task(void *pvParameters)
                         current_num = 1;
                         ntf_value_p = (uint8_t *)malloc((spp_mtu_size-3)*sizeof(uint8_t));
                         if(ntf_value_p == NULL){
-                            ESP_LOGE(GATTS_TABLE_TAG, "%s malloc.2 failed\n", __func__);
+                            syslog(LOG_ERR, "%s malloc.2 failed\n", __func__);
                             free(temp);
                             break;
                         }
@@ -487,7 +486,11 @@ void spp_cmd_task(void * arg)
     for(;;){
         vTaskDelay(50 / portTICK_PERIOD_MS);
         if(xQueueReceive(cmd_cmd_queue, &cmd_id, portMAX_DELAY)) {
-            esp_log_buffer_char(GATTS_TABLE_TAG,(char *)(cmd_id),strlen((char *)cmd_id));
+            //esp_log_buffer_char(GATTS_TABLE_TAG,(char *)(cmd_id),strlen((char *)cmd_id));
+            for (int i=0; i<strlen((char*)cmd_id); i++ ) {
+	        	printf("%c", cmd_id[i]);
+	        }
+
             free(cmd_id);
         }
     }
@@ -510,7 +513,7 @@ static void spp_task_init(void)
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
     esp_err_t err;
-    ESP_LOGE(GATTS_TABLE_TAG, "GAP_EVT, event %d\n", event);
+    syslog(LOG_ERR, "GAP_EVT, event %d\n", event);
 
     switch (event) {
     case ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT:
@@ -519,9 +522,9 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
     case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
         //advertising start complete event to indicate advertising start successfully or failed
         if((err = param->adv_start_cmpl.status) != ESP_BT_STATUS_SUCCESS) {
-            ESP_LOGE(GATTS_TABLE_TAG, "Advertising start failed: %s\n", esp_err_to_name(err));
+            syslog(LOG_ERR, "Advertising start failed: %s\n", esp_err_to_name(err));
         } else {
-            ESP_LOGE(GATTS_TABLE_TAG, "Advertising start success\n");
+            syslog(LOG_ERR, "Advertising start success\n");
         }
         break;
     default:
@@ -534,16 +537,16 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
     esp_ble_gatts_cb_param_t *p_data = (esp_ble_gatts_cb_param_t *) param;
     uint8_t res = 0xff;
 
-    ESP_LOGI(GATTS_TABLE_TAG, "event = %x\n",event);
+    syslog(LOG_INFO, "event = %x\n",event);
     switch (event) {
     	case ESP_GATTS_REG_EVT:
-    	    ESP_LOGI(GATTS_TABLE_TAG, "%s %d\n", __func__, __LINE__);
+    	    syslog(LOG_INFO, "%s %d\n", __func__, __LINE__);
         	esp_ble_gap_set_device_name(SAMPLE_DEVICE_NAME);
 
-        	ESP_LOGI(GATTS_TABLE_TAG, "%s %d\n", __func__, __LINE__);
+        	syslog(LOG_INFO, "%s %d\n", __func__, __LINE__);
         	esp_ble_gap_config_adv_data_raw((uint8_t *)spp_adv_data, sizeof(spp_adv_data));
 
-        	ESP_LOGI(GATTS_TABLE_TAG, "%s %d\n", __func__, __LINE__);
+        	syslog(LOG_INFO, "%s %d\n", __func__, __LINE__);
         	esp_ble_gatts_create_attr_tab(spp_gatt_db, gatts_if, SPP_IDX_NB, SPP_SVC_INST_ID);
        	break;
     	case ESP_GATTS_READ_EVT:
@@ -555,12 +558,12 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
     	case ESP_GATTS_WRITE_EVT: {
     	    res = find_char_and_desr_index(p_data->write.handle);
             if(p_data->write.is_prep == false){
-                ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_WRITE_EVT : handle = %d\n", res);
+                syslog(LOG_INFO, "ESP_GATTS_WRITE_EVT : handle = %d\n", res);
                 if(res == SPP_IDX_SPP_COMMAND_VAL){
                     uint8_t * spp_cmd_buff = NULL;
                     spp_cmd_buff = (uint8_t *)malloc((spp_mtu_size - 3) * sizeof(uint8_t));
                     if(spp_cmd_buff == NULL){
-                        ESP_LOGE(GATTS_TABLE_TAG, "%s malloc failed\n", __func__);
+                        syslog(LOG_ERR, "%s malloc failed\n", __func__);
                         break;
                     }
                     memset(spp_cmd_buff,0x0,(spp_mtu_size - 3));
@@ -588,7 +591,10 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 #endif
                 else if(res == SPP_IDX_SPP_DATA_RECV_VAL){
 #ifdef SPP_DEBUG_MODE
-                    esp_log_buffer_char(GATTS_TABLE_TAG,(char *)(p_data->write.value),p_data->write.len);
+                    //esp_log_buffer_char(GATTS_TABLE_TAG,(char *)(p_data->write.value),p_data->write.len);
+                    for (int i=0; i<p_data->write.len; i++ ) {
+        				printf("%c", p_data->write.value[i]);
+        			}
 #else
                     uart_write_bytes(UART_NUM_1, (char *)(p_data->write.value), p_data->write.len);
 #endif
@@ -596,13 +602,13 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
                     //TODO:
                 }
             }else if((p_data->write.is_prep == true)&&(res == SPP_IDX_SPP_DATA_RECV_VAL)){
-                ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_PREP_WRITE_EVT : handle = %d\n", res);
+                syslog(LOG_INFO, "ESP_GATTS_PREP_WRITE_EVT : handle = %d\n", res);
                 store_wr_buffer(p_data);
             }
       	 	break;
     	}
     	case ESP_GATTS_EXEC_WRITE_EVT:{
-    	    ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_EXEC_WRITE_EVT\n");
+    	    syslog(LOG_INFO, "ESP_GATTS_EXEC_WRITE_EVT\n");
     	    if(p_data->exec_write.exec_write_flag){
     	        print_write_buffer();
     	        free_write_buffer();
@@ -652,12 +658,12 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
     	case ESP_GATTS_CONGEST_EVT:
     	    break;
     	case ESP_GATTS_CREAT_ATTR_TAB_EVT:{
-    	    ESP_LOGI(GATTS_TABLE_TAG, "The number handle =%x\n",param->add_attr_tab.num_handle);
+    	    syslog(LOG_INFO, "The number handle =%x\n",param->add_attr_tab.num_handle);
     	    if (param->add_attr_tab.status != ESP_GATT_OK){
-    	        ESP_LOGE(GATTS_TABLE_TAG, "Create attribute table failed, error code=0x%x", param->add_attr_tab.status);
+    	        syslog(LOG_ERR, "Create attribute table failed, error code=0x%x", param->add_attr_tab.status);
     	    }
     	    else if (param->add_attr_tab.num_handle != SPP_IDX_NB){
-    	        ESP_LOGE(GATTS_TABLE_TAG, "Create attribute table abnormally, num_handle (%d) doesn't equal to HRS_IDX_NB(%d)", param->add_attr_tab.num_handle, SPP_IDX_NB);
+    	        syslog(LOG_ERR, "Create attribute table abnormally, num_handle (%d) doesn't equal to HRS_IDX_NB(%d)", param->add_attr_tab.num_handle, SPP_IDX_NB);
     	    }
     	    else {
     	        memcpy(spp_handle_table, param->add_attr_tab.handles, sizeof(spp_handle_table));
@@ -673,14 +679,14 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 
 static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param)
 {
-    ESP_LOGI(GATTS_TABLE_TAG, "EVT %d, gatts if %d\n", event, gatts_if);
+    syslog(LOG_INFO, "EVT %d, gatts if %d\n", event, gatts_if);
 
     /* If event is register event, store the gatts_if for each profile */
     if (event == ESP_GATTS_REG_EVT) {
         if (param->reg.status == ESP_GATT_OK) {
             spp_profile_tab[SPP_PROFILE_APP_IDX].gatts_if = gatts_if;
         } else {
-            ESP_LOGI(GATTS_TABLE_TAG, "Reg app failed, app_id %04x, status %d\n",param->reg.app_id, param->reg.status);
+            syslog(LOG_INFO, "Reg app failed, app_id %04x, status %d\n",param->reg.app_id, param->reg.status);
             return;
         }
     }
@@ -716,7 +722,7 @@ static int robotito_ble_init (lua_State *L) {
 	ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
 	ret = esp_bt_controller_init(&bt_cfg);
 	if (ret) {
-	    ESP_LOGE(GATTS_TABLE_TAG, "%s init controller failed: %s\n", __func__, esp_err_to_name(ret));
+	    syslog(LOG_ERR, "%s init controller failed: %s\n", __func__, esp_err_to_name(ret));
         lua_pushnil(L);
         lua_pushstring(L, "init controller failed");
         return 2;
@@ -724,23 +730,23 @@ static int robotito_ble_init (lua_State *L) {
 
 	ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
 	if (ret) {
-    	ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed: %s\n", __func__, esp_err_to_name(ret));
+    	syslog(LOG_ERR, "%s enable controller failed: %s\n", __func__, esp_err_to_name(ret));
         lua_pushnil(L);
         lua_pushstring(L, "enable controller failed");
         return 2;
 	}
 
-	ESP_LOGI(GATTS_TABLE_TAG, "%s init bluetooth\n", __func__);
+	syslog(LOG_INFO, "%s init bluetooth\n", __func__);
 	ret = esp_bluedroid_init();
 	if (ret) {
-	    ESP_LOGE(GATTS_TABLE_TAG, "%s init bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
+	    syslog(LOG_ERR, "%s init bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
         lua_pushnil(L);
         lua_pushstring(L, "init bluetooth failed");
         return 2;
 	}
 	ret = esp_bluedroid_enable();
 	if (ret) {
-    	ESP_LOGE(GATTS_TABLE_TAG, "%s enable bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
+    	syslog(LOG_ERR, "%s enable bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
         lua_pushnil(L);
         lua_pushstring(L, "enable bluetooth failed");
         return 2;
@@ -772,14 +778,14 @@ static int robotito_ble_send (lua_State *L) {
     temp = (uint8_t *)malloc(sizeof(uint8_t)*length);
     
     if(temp == NULL){
-        ESP_LOGE(GATTS_TABLE_TAG, "%s malloc.1 failed\n", __func__);
+        syslog(LOG_ERR, "%s malloc.1 failed\n", __func__);
         lua_pushnil(L);
         lua_pushstring(L, "malloc.1 failed");
     }
     memcpy(temp,string,length);
 
     if(!enable_data_ntf){
-        ESP_LOGE(GATTS_TABLE_TAG, "%s do not enable data Notify\n", __func__);
+        syslog(LOG_ERR, "%s do not enable data Notify\n", __func__);
         lua_pushnil(L);
         lua_pushstring(L, "do not enable data Notify");
         return 2;
@@ -796,7 +802,7 @@ static int robotito_ble_send (lua_State *L) {
         current_num = 1;
         ntf_value_p = (uint8_t *)malloc((spp_mtu_size-3)*sizeof(uint8_t));
         if(ntf_value_p == NULL){
-            ESP_LOGE(GATTS_TABLE_TAG, "%s malloc.2 failed\n", __func__);
+            syslog(LOG_ERR, "%s malloc.2 failed\n", __func__);
             free(temp);
             lua_pushnil(L);
             lua_pushstring(L, "malloc.2 failed");
