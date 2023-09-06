@@ -57,6 +57,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include "freertos/adds.h"
 #include "esp_system.h"
 //#include "esp_log.h"
 #include "nvs_flash.h"
@@ -69,6 +70,12 @@
 #include "esp_bt_defs.h"
 #include "esp_bt_main.h"
 #include "robotito_ble.h"
+
+#include "lua.h"
+#include "lualib.h"
+#include "lauxlib.h"
+
+int robotito_ble_rcv_callback = LUA_REFNIL;
 
 #define GATTS_TABLE_TAG  "GATTS_SPP_DEMO"
 
@@ -592,12 +599,33 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
                 else if(res == SPP_IDX_SPP_DATA_RECV_VAL){
 #ifdef SPP_DEBUG_MODE
                     //esp_log_buffer_char(GATTS_TABLE_TAG,(char *)(p_data->write.value),p_data->write.len);
+                    printf("Arrived %d bytes: ", p_data->write.len);
                     for (int i=0; i<p_data->write.len; i++ ) {
-        				printf("%c", p_data->write.value[i]);
+						printf("%c", p_data->write.value[i]);
         			}
+					printf("\n");
 #else
                     uart_write_bytes(UART_NUM_1, (char *)(p_data->write.value), p_data->write.len);
 #endif
+                    if (robotito_ble_rcv_callback!=LUA_REFNIL) {
+
+		                //prepare thread
+						lua_State *L = pvGetLuaState();
+						lua_State *TL = lua_newthread(L);
+						int tref = luaL_ref(L, LUA_REGISTRYINDEX);
+						lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_ble_rcv_callback);
+						lua_xmove(L, TL, 1);
+
+						lua_pushlstring(TL, (char*)p_data->write.value, p_data->write.len);
+                        int status = lua_pcall(TL, 1, 0, 0);
+			            luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+		                if (status != LUA_OK) {
+					        const char *msg = lua_tostring(TL, -1);
+					        lua_writestringerror("error in rcv callback: %s\n", msg);
+					        lua_pop(TL, 1);
+						}
+                    }
                 }else{
                     //TODO:
                 }
@@ -837,10 +865,29 @@ static int robotito_ble_send (lua_State *L) {
     return 1;
 }
 
+static int robotito_ble_rcv (lua_State *L) {
+    bool enable = lua_toboolean(L, 1);
+    if (enable) {
+	    luaL_checktype(L, 1, LUA_TFUNCTION);
+        lua_pushvalue(L, 1);
+        robotito_ble_rcv_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+    } else {
+        if (robotito_ble_rcv_callback==LUA_REFNIL) {
+            lua_pushnil(L);
+            lua_pushstring(L, "no rcv callback set");
+            return 2;
+        }
+        robotito_ble_rcv_callback = LUA_REFNIL;
+    }
+
+    lua_pushboolean(L, true);
+	return 1;
+}
 
 static const luaL_Reg robotito_ble[] = {
     {"init", robotito_ble_init},
     {"send", robotito_ble_send},
+    {"set_rcv_callback", robotito_ble_rcv},
     {NULL, NULL}
 };
 
