@@ -565,9 +565,6 @@ void ble_client_appRegister(void)
     esp_err_t status;
     char err_msg[20];
     
-printf("!!!register callback\n");
-    syslog(LOG_INFO, "register callback");
-
     //register the scan callback function to the gap module
     if ((status = esp_ble_gap_register_callback(esp_gap_cb)) != ESP_OK) {
         syslog(LOG_ERR, "gap register error: %s", esp_err_to_name_r(status, err_msg, sizeof(err_msg)));

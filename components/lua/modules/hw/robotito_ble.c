@@ -5,7 +5,7 @@
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * modification, are permitted provided that the following conditions are met:º
  *
  *     * Redistributions of source code must retain the above copyright
  *       notice, this list of conditions and the following disclaimer.
@@ -51,7 +51,6 @@
 #include "error.h"
 #include "sys.h"
 #include "modules.h"
-#include "luartos.h"
 #include <sys/syslog.h>
 
 #include "freertos/FreeRTOS.h"
@@ -62,7 +61,6 @@
 //#include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_bt.h"
-#include "driver/uart.h"
 #include "string.h"
 
 #include "esp_gap_ble_api.h"
@@ -75,6 +73,7 @@
 #include "lualib.h"
 #include "lauxlib.h"
 
+bool robotito_ble_initialized = false;
 int robotito_ble_rcv_callback = LUA_REFNIL;
 
 #define GATTS_TABLE_TAG  "GATTS_SPP_DEMO"
@@ -106,7 +105,6 @@ static const uint8_t spp_adv_data[23] = {
 static uint16_t spp_mtu_size = 23;
 static uint16_t spp_conn_id = 0xffff;
 static esp_gatt_if_t spp_gatts_if = 0xff;
-QueueHandle_t spp_uart_queue = NULL;
 static xQueueHandle cmd_cmd_queue = NULL;
 
 #ifdef SUPPORT_HEARTBEAT
@@ -351,6 +349,7 @@ static void free_write_buffer(void)
     SppRecvDataBuff.first_node = NULL;
 }
 
+/*
 static void print_write_buffer(void)
 {
     temp_spp_recv_data_node_p1 = SppRecvDataBuff.first_node;
@@ -360,105 +359,7 @@ static void print_write_buffer(void)
         temp_spp_recv_data_node_p1 = temp_spp_recv_data_node_p1->next_node;
     }
 }
-
-void uart_task(void *pvParameters)
-{
-    uart_event_t event;
-    uint8_t total_num = 0;
-    uint8_t current_num = 0;
-
-    for (;;) {
-        //Waiting for UART event.
-        if (xQueueReceive(spp_uart_queue, (void * )&event, (portTickType)portMAX_DELAY)) {
-            switch (event.type) {
-            //Event of UART receving data
-            case UART_DATA:
-                if ((event.size)&&(is_connected)) {
-                    uint8_t * temp = NULL;
-                    uint8_t * ntf_value_p = NULL;
-#ifdef SUPPORT_HEARTBEAT
-                    if(!enable_heart_ntf){
-                        syslog(LOG_ERR, "%s do not enable heartbeat Notify\n", __func__);
-                        break;
-                    }
-#endif
-                    if(!enable_data_ntf){
-                        syslog(LOG_ERR, "%s do not enable data Notify\n", __func__);
-                        break;
-                    }
-                    temp = (uint8_t *)malloc(sizeof(uint8_t)*event.size);
-                    if(temp == NULL){
-                        syslog(LOG_ERR, "%s malloc.1 failed\n", __func__);
-                        break;
-                    }
-                    memset(temp,0x0,event.size);
-                    uart_read_bytes(UART_NUM_1,temp,event.size,portMAX_DELAY);
-                    if(event.size <= (spp_mtu_size - 3)){
-                        esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],event.size, temp, false);
-                    }else if(event.size > (spp_mtu_size - 3)){
-                        if((event.size%(spp_mtu_size - 7)) == 0){
-                            total_num = event.size/(spp_mtu_size - 7);
-                        }else{
-                            total_num = event.size/(spp_mtu_size - 7) + 1;
-                        }
-                        current_num = 1;
-                        ntf_value_p = (uint8_t *)malloc((spp_mtu_size-3)*sizeof(uint8_t));
-                        if(ntf_value_p == NULL){
-                            syslog(LOG_ERR, "%s malloc.2 failed\n", __func__);
-                            free(temp);
-                            break;
-                        }
-                        while(current_num <= total_num){
-                            if(current_num < total_num){
-                                ntf_value_p[0] = '#';
-                                ntf_value_p[1] = '#';
-                                ntf_value_p[2] = total_num;
-                                ntf_value_p[3] = current_num;
-                                memcpy(ntf_value_p + 4,temp + (current_num - 1)*(spp_mtu_size-7),(spp_mtu_size-7));
-                                esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],(spp_mtu_size-3), ntf_value_p, false);
-                            }else if(current_num == total_num){
-                                ntf_value_p[0] = '#';
-                                ntf_value_p[1] = '#';
-                                ntf_value_p[2] = total_num;
-                                ntf_value_p[3] = current_num;
-                                memcpy(ntf_value_p + 4,temp + (current_num - 1)*(spp_mtu_size-7),(event.size - (current_num - 1)*(spp_mtu_size - 7)));
-                                esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],(event.size - (current_num - 1)*(spp_mtu_size - 7) + 4), ntf_value_p, false);
-                            }
-                            vTaskDelay(20 / portTICK_PERIOD_MS);
-                            current_num++;
-                        }
-                        free(ntf_value_p);
-                    }
-                    free(temp);
-                }
-                break;
-            default:
-                break;
-            }
-        }
-    }
-    vTaskDelete(NULL);
-}
-
-static void spp_uart_init(void)
-{
-    uart_config_t uart_config = {
-        .baud_rate = 115200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_RTS,
-        .rx_flow_ctrl_thresh = 122,
-    };
-
-    //Set UART parameters
-    uart_param_config(UART_NUM_1, &uart_config);
-    //Set UART pins
-    uart_set_pin(UART_NUM_1, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    //Install UART driver, and get the queue.
-    uart_driver_install(UART_NUM_1, 4096, 8192, 10,&spp_uart_queue,0);
-    xTaskCreate(uart_task, "uTask", 2048, (void*)UART_NUM_1, 8, NULL);
-}
+*/
 
 #ifdef SUPPORT_HEARTBEAT
 void spp_heartbeat_task(void * arg)
@@ -506,8 +407,6 @@ void spp_cmd_task(void * arg)
 
 static void spp_task_init(void)
 {
-    spp_uart_init();
-
 #ifdef SUPPORT_HEARTBEAT
     cmd_heartbeat_queue = xQueueCreate(10, sizeof(uint32_t));
     xTaskCreate(spp_heartbeat_task, "spp_heartbeat_task", 2048, NULL, 10, NULL);
@@ -604,8 +503,6 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 						printf("%c", p_data->write.value[i]);
         			}
 					printf("\n");
-#else
-                    uart_write_bytes(UART_NUM_1, (char *)(p_data->write.value), p_data->write.len);
 #endif
                     if (robotito_ble_rcv_callback!=LUA_REFNIL) {
 
@@ -638,7 +535,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
     	case ESP_GATTS_EXEC_WRITE_EVT:{
     	    syslog(LOG_INFO, "ESP_GATTS_EXEC_WRITE_EVT\n");
     	    if(p_data->exec_write.exec_write_flag){
-    	        print_write_buffer();
+    	        //print_write_buffer();
     	        free_write_buffer();
     	    }
     	    break;
@@ -734,6 +631,13 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 
 
 static int robotito_ble_init (lua_State *L) {
+	if (robotito_ble_initialized) {
+	    syslog(LOG_WARNING, "already initialized\n");
+        lua_pushnil(L);
+        lua_pushstring(L, "already initialized");
+        return 2;
+	}
+
 	printf("initializing robotito_ble\n");
   
 	esp_err_t ret;
@@ -786,13 +690,13 @@ static int robotito_ble_init (lua_State *L) {
 
 	spp_task_init();
  
+ 	robotito_ble_initialized =  true;
+ 
     lua_pushboolean(L, true);
     return 1;
 }
 
 static int robotito_ble_send (lua_State *L) {
-	printf("robotito_ble send\n");
-	
     uint8_t total_num = 0;
     uint8_t current_num = 0;
     
@@ -813,9 +717,9 @@ static int robotito_ble_send (lua_State *L) {
     memcpy(temp,string,length);
 
     if(!enable_data_ntf){
-        syslog(LOG_ERR, "%s do not enable data Notify\n", __func__);
+        syslog(LOG_ERR, "%s not enabled data Notify\n", __func__);
         lua_pushnil(L);
-        lua_pushstring(L, "do not enable data Notify");
+        lua_pushstring(L, "not enabled data Notify");
         return 2;
     }
 
