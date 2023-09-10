@@ -697,6 +697,13 @@ static int robotito_ble_init (lua_State *L) {
 }
 
 static int robotito_ble_send (lua_State *L) {
+    if(!enable_data_ntf){
+        syslog(LOG_ERR, "%s not enabled data Notify\n", __func__);
+        lua_pushnil(L);
+        lua_pushstring(L, "not enabled data Notify");
+        return 2;
+    }
+
     uint8_t total_num = 0;
     uint8_t current_num = 0;
     
@@ -716,20 +723,13 @@ static int robotito_ble_send (lua_State *L) {
     }
     memcpy(temp,string,length);
 
-    if(!enable_data_ntf){
-        syslog(LOG_ERR, "%s not enabled data Notify\n", __func__);
-        lua_pushnil(L);
-        lua_pushstring(L, "not enabled data Notify");
-        return 2;
-    }
-
     if(length <= (spp_mtu_size - 3)){
         esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],length, temp, false);
     }else if(length > (spp_mtu_size - 3)){
-        if((length%(spp_mtu_size - 7)) == 0){
-            total_num = length/(spp_mtu_size - 7);
+        if((length%(spp_mtu_size - 3)) == 0){
+            total_num = length/(spp_mtu_size - 3);
         }else{
-            total_num = length/(spp_mtu_size - 7) + 1;
+            total_num = length/(spp_mtu_size - 3) + 1;
         }
         current_num = 1;
         ntf_value_p = (uint8_t *)malloc((spp_mtu_size-3)*sizeof(uint8_t));
@@ -743,19 +743,11 @@ static int robotito_ble_send (lua_State *L) {
         
         while(current_num <= total_num){
             if(current_num < total_num){
-                ntf_value_p[0] = '#';
-                ntf_value_p[1] = '#';
-                ntf_value_p[2] = total_num;
-                ntf_value_p[3] = current_num;
-                memcpy(ntf_value_p + 4,temp + (current_num - 1)*(spp_mtu_size-7),(spp_mtu_size-7));
+                memcpy(ntf_value_p,temp + (current_num - 1)*(spp_mtu_size-3),(spp_mtu_size-7));
                 esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],(spp_mtu_size-3), ntf_value_p, false);
             }else if(current_num == total_num){
-                ntf_value_p[0] = '#';
-                ntf_value_p[1] = '#';
-                ntf_value_p[2] = total_num;
-                ntf_value_p[3] = current_num;
-                memcpy(ntf_value_p + 4,temp + (current_num - 1)*(spp_mtu_size-7),(length - (current_num - 1)*(spp_mtu_size - 7)));
-                esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],(length - (current_num - 1)*(spp_mtu_size - 7) + 4), ntf_value_p, false);
+                memcpy(ntf_value_p,temp + (current_num - 1)*(spp_mtu_size-3),(length - (current_num - 1)*(spp_mtu_size - 3)));
+                esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],(length - (current_num - 1)*(spp_mtu_size - 3)), ntf_value_p, false);
             }
             vTaskDelay(20 / portTICK_PERIOD_MS);
             current_num++;
