@@ -75,6 +75,12 @@
 
 bool robotito_ble_initialized = false;
 int robotito_ble_rcv_callback = LUA_REFNIL;
+int robotito_ble_line_callback = LUA_REFNIL;
+
+
+#define LINE_BUFF_SIZE 1024
+uint8_t *line_buff = NULL;
+int line_buff_last = 0;
 
 #define GATTS_TABLE_TAG  "GATTS_SPP_DEMO"
 
@@ -523,6 +529,57 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 					        lua_pop(TL, 1);
 						}
                     }
+                    if (robotito_ble_line_callback!=LUA_REFNIL) {
+                        if (line_buff_last+p_data->write.len>LINE_BUFF_SIZE) {
+                            // if buffer overflow, send current buffer in error output
+		                    //prepare thread
+						    lua_State *L = pvGetLuaState();
+						    lua_State *TL = lua_newthread(L);
+						    int tref = luaL_ref(L, LUA_REGISTRYINDEX);
+						    lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_ble_line_callback);
+						    lua_xmove(L, TL, 1);
+
+                            lua_pushnil(TL);
+						    lua_pushlstring(TL, (char*)line_buff, line_buff_last);
+						    line_buff_last = 0;
+                            int status = lua_pcall(TL, 2, 0, 0);
+			                luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+		                    if (status != LUA_OK) {
+					            const char *msg = lua_tostring(TL, -1);
+					            lua_writestringerror("error in line callback: %s\n", msg);
+					            lua_pop(TL, 1);
+						    }    
+						    
+                        }
+                        memcpy(line_buff+line_buff_last, (char*)p_data->write.value,p_data->write.len);
+                        int start_search = line_buff_last;
+                        line_buff_last += p_data->write.len;
+                        char *pos = memchr(line_buff+start_search, (char)10, line_buff_last-start_search);
+                        while ( pos ) {
+                            
+		                    //prepare thread
+						    lua_State *L = pvGetLuaState();
+						    lua_State *TL = lua_newthread(L);
+						    int tref = luaL_ref(L, LUA_REGISTRYINDEX);
+						    lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_ble_line_callback);
+						    lua_xmove(L, TL, 1);
+
+						    lua_pushlstring(TL, (char*)line_buff, pos-(char*)line_buff);
+						    memcpy(line_buff, pos+1, (char*)line_buff+line_buff_last-pos-1);
+                            int status = lua_pcall(TL, 1, 0, 0);
+			                luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+		                    if (status != LUA_OK) {
+					            const char *msg = lua_tostring(TL, -1);
+					            lua_writestringerror("error in line callback: %s\n", msg);
+					            lua_pop(TL, 1);
+						    }                        
+                            
+                            pos = memchr(line_buff+start_search, (char)10, line_buff_last-start_search);
+                            start_search = 0;
+                        }
+                    }
                 }else{
                     //TODO:
                 }
@@ -780,10 +837,40 @@ static int robotito_ble_rcv (lua_State *L) {
 	return 1;
 }
 
+static int robotito_ble_line (lua_State *L) {
+    bool enable = lua_toboolean(L, 1);
+    if (enable) {
+        if (line_buff==NULL) {
+            line_buff = (uint8_t*)malloc(sizeof(uint8_t)*LINE_BUFF_SIZE);
+            if(line_buff == NULL){
+                syslog(LOG_ERR, "%s malloc failed\n", __func__);
+                lua_pushnil(L);
+                lua_pushstring(L, "malloc failed");
+                return 2;
+            }   
+        }
+
+	    luaL_checktype(L, 1, LUA_TFUNCTION);
+        lua_pushvalue(L, 1);
+        robotito_ble_line_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+    } else {
+        if (robotito_ble_line_callback==LUA_REFNIL) {
+            lua_pushnil(L);
+            lua_pushstring(L, "no line callback set");
+            return 2;
+        }
+        robotito_ble_line_callback = LUA_REFNIL;
+    }
+
+    lua_pushboolean(L, true);
+	return 1;
+}
+
 static const luaL_Reg robotito_ble[] = {
     {"init", robotito_ble_init},
     {"send", robotito_ble_send},
     {"set_rcv_callback", robotito_ble_rcv},
+    {"set_line_callback", robotito_ble_line},
     {NULL, NULL}
 };
 
