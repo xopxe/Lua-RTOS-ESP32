@@ -576,8 +576,8 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 					            lua_pop(TL, 1);
 						    }                        
                             
-                            pos = memchr(line_buff+start_search, (char)10, line_buff_last-start_search);
-                            start_search = 0;
+                            line_buff_last -= (pos-(char*)line_buff+1);
+                            pos = memchr(line_buff, (char)10, line_buff_last);
                         }
                     }
                 }else{
@@ -767,7 +767,6 @@ static int robotito_ble_send (lua_State *L) {
 	size_t length;
 	const uint8_t *string = (uint8_t *) luaL_checklstring(L, 1, &length);
 
-///////////////////////////////////////+
     uint8_t * temp = NULL;
     uint8_t * ntf_value_p = NULL;
     
@@ -812,7 +811,6 @@ static int robotito_ble_send (lua_State *L) {
         free(ntf_value_p);
     }
     free(temp);
-///////////////////////////////////////-
 
     lua_pushboolean(L, true);
     return 1;
