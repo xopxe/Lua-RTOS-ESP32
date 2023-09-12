@@ -79,7 +79,7 @@ int robotito_ble_line_callback = LUA_REFNIL;
 
 
 #define LINE_BUFF_SIZE 1024
-uint8_t *line_buff = NULL;
+char *line_buff = NULL;
 int line_buff_last = 0;
 
 #define GATTS_TABLE_TAG  "GATTS_SPP_DEMO"
@@ -552,7 +552,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 						    }    
 						    
                         }
-                        memcpy(line_buff+line_buff_last, (char*)p_data->write.value,p_data->write.len);
+                        memcpy(line_buff+line_buff_last, p_data->write.value,p_data->write.len);
                         int start_search = line_buff_last;
                         line_buff_last += p_data->write.len;
                         char *pos = memchr(line_buff+start_search, (char)10, line_buff_last-start_search);
@@ -565,8 +565,8 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 						    lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_ble_line_callback);
 						    lua_xmove(L, TL, 1);
 
-						    lua_pushlstring(TL, (char*)line_buff, pos-(char*)line_buff);
-						    memcpy(line_buff, pos+1, (char*)line_buff+line_buff_last-pos-1);
+						    lua_pushlstring(TL, line_buff, pos-line_buff);
+						    memcpy(line_buff, pos+1, line_buff+line_buff_last-pos-1);
                             int status = lua_pcall(TL, 1, 0, 0);
 			                luaL_unref(TL, LUA_REGISTRYINDEX, tref);
 
@@ -576,7 +576,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 					            lua_pop(TL, 1);
 						    }                        
                             
-                            line_buff_last -= (pos-(char*)line_buff+1);
+                            line_buff_last -= (pos-line_buff+1);
                             pos = memchr(line_buff, (char)10, line_buff_last);
                         }
                     }
@@ -839,7 +839,7 @@ static int robotito_ble_line (lua_State *L) {
     bool enable = lua_toboolean(L, 1);
     if (enable) {
         if (line_buff==NULL) {
-            line_buff = (uint8_t*)malloc(sizeof(uint8_t)*LINE_BUFF_SIZE);
+            line_buff = (char*)malloc(sizeof(char)*LINE_BUFF_SIZE);
             if(line_buff == NULL){
                 syslog(LOG_ERR, "%s malloc failed\n", __func__);
                 lua_pushnil(L);
