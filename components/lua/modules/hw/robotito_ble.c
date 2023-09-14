@@ -77,8 +77,6 @@ bool robotito_ble_initialized = false;
 int robotito_ble_rcv_callback = LUA_REFNIL;
 int robotito_ble_line_callback = LUA_REFNIL;
 
-
-#define LINE_BUFF_SIZE 1024
 char *line_buff = NULL;
 int line_buff_last = 0;
 
@@ -530,7 +528,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 						}
                     }
                     if (robotito_ble_line_callback!=LUA_REFNIL) {
-                        if (line_buff_last+p_data->write.len>LINE_BUFF_SIZE) {
+                        if (line_buff_last+p_data->write.len>CONFIG_ROBOTITO_BLE_LINEBUFFER) {
                             // if buffer overflow, send current buffer in error output
 		                    //prepare thread
 						    lua_State *L = pvGetLuaState();
@@ -839,7 +837,7 @@ static int robotito_ble_line (lua_State *L) {
     bool enable = lua_toboolean(L, 1);
     if (enable) {
         if (line_buff==NULL) {
-            line_buff = (char*)malloc(sizeof(char)*LINE_BUFF_SIZE);
+            line_buff = (char*)malloc(sizeof(char)*CONFIG_ROBOTITO_BLE_LINEBUFFER);
             if(line_buff == NULL){
                 syslog(LOG_ERR, "%s malloc failed\n", __func__);
                 lua_pushnil(L);
