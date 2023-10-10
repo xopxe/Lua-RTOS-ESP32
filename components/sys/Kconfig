@@ -1538,6 +1538,15 @@ menu "Lua RTOS"
 		    	help
 		    		Size of the buffer where data is accumulated
 		    endmenu
+
+		    menu "ROBOTITO_SPP"
+		    	config ROBOTITO_SPP_LINEBUFFER
+		    	int "line buffer size"
+		    	default 1024
+		    	help
+		    		Size of the buffer where data is accumulated
+		    endmenu
+
         endmenu
 
          
@@ -1851,10 +1860,18 @@ menu "Lua RTOS"
                
             config LUA_RTOS_LUA_USE_ROBOTITO_BLE
                bool "Include robotito BLE driver"
-               default y
+               default n
 
             config LUA_RTOS_LUA_USE_ROBOTITO_BLECLI
                bool "Include robotito BLE test client"
+               default n
+
+            config LUA_RTOS_LUA_USE_ROBOTITO_SPP
+               bool "Include robotito Bluetooth Classic SPP driver"
+               default y
+
+            config LUA_RTOS_LUA_USE_ROBOTITO_SPPCLI
+               bool "Include robotito Bluetooth Classic SPP test client"
                default y
                
             config LUA_RTOS_LUA_USE_THREAD
