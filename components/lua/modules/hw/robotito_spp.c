@@ -26,6 +26,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/adds.h"
+#include "freertos/ringbuf.h"
 //#include "esp_log.h"
 #include "esp_bt.h"
 #include "esp_bt_main.h"
@@ -68,8 +69,11 @@ static long data_num = 0;
 static const esp_spp_sec_t sec_mask = ESP_SPP_SEC_AUTHENTICATE;
 static const esp_spp_role_t role_slave = ESP_SPP_ROLE_SLAVE;
 
-static xQueueHandle spp_rcv_queue = NULL;
-
+//static xQueueHandle spp_rcv_queue = NULL;
+#define STREAM_BUFFER_SIZE_BYTES 1000
+static uint8_t ucStreamBufferWithCallbackStorage[ STREAM_BUFFER_SIZE_BYTES + 1 ];
+StaticStreamBuffer_t xStreamBufferWithCallbackStruct;
+StreamBufferHandle_t xStreamBufferWithCallback;
 
 static void print_speed(void)
 {
@@ -83,6 +87,7 @@ static void print_speed(void)
     time_old.tv_usec = time_new.tv_usec;
 }
 
+/*
 void spp_rcv_task(void * arg)
 {   
     esp_spp_cb_param_t * param;
@@ -109,6 +114,45 @@ void spp_rcv_task(void * arg)
         }
     }
     vTaskDelete(NULL);
+}
+*/
+
+void vSendCallbackFunction( StreamBufferHandle_t xStreamBuffer,
+                            BaseType_t xIsInsideISR,
+                            BaseType_t * const pxHigherPriorityTaskWoken )
+{
+	uint8_t ucRxData[ 20 ];
+	size_t xReceivedBytes;
+	const TickType_t xBlockTime = portMAX_DELAY; //xBlockTime = pdMS_TO_TICKS( 20 );
+	
+	xReceivedBytes = xStreamBufferReceive( xStreamBuffer,
+                                           ( void * ) ucRxData,
+                                           sizeof( ucRxData ),
+                                           xBlockTime );
+
+    if( xReceivedBytes > 0 )
+    {
+        /* A ucRxData contains another xRecievedBytes bytes of data, which can
+        be processed here.... */
+        
+	    //prepare thread
+		lua_State *L = pvGetLuaState();
+		lua_State *TL = lua_newthread(L);
+		int tref = luaL_ref(L, LUA_REGISTRYINDEX);
+		lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_spp_rcv_callback);
+		lua_xmove(L, TL, 1);
+
+		lua_pushlstring(TL, (char*)ucRxData, xRecievedBytes);
+	    int status = lua_pcall(TL, 1, 0, 0);
+	    luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+	    if (status != LUA_OK) {
+		    const char *msg = lua_tostring(TL, -1);
+		    lua_writestringerror("error in rcv callback: %s\n", msg);
+		    lua_pop(TL, 1);
+		}
+        
+    }
 }
 
 static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
@@ -144,9 +188,16 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
         if (time_new.tv_sec - time_old.tv_sec >= 3) {
             print_speed();
         }
-
+        
+        
+		const TickType_t x100ms = pdMS_TO_TICKS( 100 );
 		if (robotito_spp_rcv_callback!=LUA_REFNIL) {
-			 xQueueSend(spp_rcv_queue,&param,10/portTICK_PERIOD_MS);
+			xBytesSent = xStreamBufferSend( xStreamBuffer,
+                                   ( void * ) param->data_ind.data,
+                                   sizeof( param->data_ind.len ),
+                                   x100ms );			
+			
+			//xQueueSend(spp_rcv_queue,&param,10/portTICK_PERIOD_MS);
 /*
 		    //prepare thread
 			lua_State *L = pvGetLuaState();
@@ -369,8 +420,16 @@ static int robotito_spp_init (lua_State *L) {
     esp_bt_gap_set_security_param(param_type, &iocap, sizeof(uint8_t));
 #endif
 
-    spp_rcv_queue = xQueueCreate(1, sizeof(uint32_t));
-    xTaskCreate(spp_rcv_task, "spp_rcv_task", 4096, NULL, 10, NULL);
+    //spp_rcv_queue = xQueueCreate(1, sizeof(uint32_t));
+    //xTaskCreate(spp_rcv_task, "spp_rcv_task", 4096, NULL, 10, NULL);
+	const size_t xTriggerLevel = 1;
+	xStreamBufferWithCallback = xStreamBufferCreateStaticWithCallback(
+	                                STREAM_BUFFER_SIZE_BYTES,
+                                    xTriggerLevel,
+                                    ucStreamBufferWithCallbackStorage,
+                                    &xStreamBufferWithCallbackStruct,
+                                    vSendCallbackFunction,
+                                    NULL );   
 
     /*
      * Set default parameters for Legacy Pairing
