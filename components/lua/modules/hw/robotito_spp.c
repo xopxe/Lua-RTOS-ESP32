@@ -118,6 +118,58 @@ void spp_rcv_task(void * arg)
 					lua_pop(TL, 1);
 				}
 			}
+	        if (robotito_spp_line_callback!=LUA_REFNIL) {
+		        if (line_buff_last+item_size>CONFIG_ROBOTITO_SPP_LINEBUFFER) {
+		            // if buffer overflow, send current buffer in error output
+		            //prepare thread
+					lua_State *L = pvGetLuaState();
+					lua_State *TL = lua_newthread(L);
+					int tref = luaL_ref(L, LUA_REGISTRYINDEX);
+					lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_spp_line_callback);
+					lua_xmove(L, TL, 1);
+
+		            lua_pushnil(TL);
+					lua_pushlstring(TL, (char*)line_buff, line_buff_last);
+					line_buff_last = 0;
+		            int status = lua_pcall(TL, 2, 0, 0);
+		            luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+		            if (status != LUA_OK) {
+				        const char *msg = lua_tostring(TL, -1);
+				        lua_writestringerror("error in line callback: %s\n", msg);
+				        lua_pop(TL, 1);
+					}    
+					
+		        }
+		        memcpy(line_buff+line_buff_last, item, item_size);
+		        int start_search = line_buff_last;
+		        line_buff_last += item_size;
+		        char *pos = memchr(line_buff+start_search, (char)10, line_buff_last-start_search);
+		        while ( pos ) {
+		            
+		            //prepare thread
+					lua_State *L = pvGetLuaState();
+					lua_State *TL = lua_newthread(L);
+					int tref = luaL_ref(L, LUA_REGISTRYINDEX);
+					lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_spp_line_callback);
+					lua_xmove(L, TL, 1);
+
+					lua_pushlstring(TL, line_buff, pos-line_buff);
+					memcpy(line_buff, pos+1, line_buff+line_buff_last-pos-1);
+		            int status = lua_pcall(TL, 1, 0, 0);
+		            luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+		            if (status != LUA_OK) {
+				        const char *msg = lua_tostring(TL, -1);
+				        lua_writestringerror("error in line callback: %s\n", msg);
+				        lua_pop(TL, 1);
+					}                        
+		            
+		            line_buff_last -= (pos-line_buff+1);
+		            pos = memchr(line_buff, (char)10, line_buff_last);
+		        }
+		    }
+
         } else {
         	//Failed to receive item
         	printf("Failed to receive item\n");
@@ -169,57 +221,6 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
 	        printf("Failed to send item\n"); //TODO
 	    }        
         
-        if (robotito_spp_line_callback!=LUA_REFNIL) {
-            if (line_buff_last+param->data_ind.len>CONFIG_ROBOTITO_SPP_LINEBUFFER) {
-                // if buffer overflow, send current buffer in error output
-                //prepare thread
-			    lua_State *L = pvGetLuaState();
-			    lua_State *TL = lua_newthread(L);
-			    int tref = luaL_ref(L, LUA_REGISTRYINDEX);
-			    lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_spp_line_callback);
-			    lua_xmove(L, TL, 1);
-
-                lua_pushnil(TL);
-			    lua_pushlstring(TL, (char*)line_buff, line_buff_last);
-			    line_buff_last = 0;
-                int status = lua_pcall(TL, 2, 0, 0);
-                luaL_unref(TL, LUA_REGISTRYINDEX, tref);
-
-                if (status != LUA_OK) {
-		            const char *msg = lua_tostring(TL, -1);
-		            lua_writestringerror("error in line callback: %s\n", msg);
-		            lua_pop(TL, 1);
-			    }    
-			    
-            }
-            memcpy(line_buff+line_buff_last, (char*)param->data_ind.data, param->data_ind.len);
-            int start_search = line_buff_last;
-            line_buff_last += param->data_ind.len;
-            char *pos = memchr(line_buff+start_search, (char)10, line_buff_last-start_search);
-            while ( pos ) {
-                
-                //prepare thread
-			    lua_State *L = pvGetLuaState();
-			    lua_State *TL = lua_newthread(L);
-			    int tref = luaL_ref(L, LUA_REGISTRYINDEX);
-			    lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_spp_line_callback);
-			    lua_xmove(L, TL, 1);
-
-			    lua_pushlstring(TL, line_buff, pos-line_buff);
-			    memcpy(line_buff, pos+1, line_buff+line_buff_last-pos-1);
-                int status = lua_pcall(TL, 1, 0, 0);
-                luaL_unref(TL, LUA_REGISTRYINDEX, tref);
-
-                if (status != LUA_OK) {
-		            const char *msg = lua_tostring(TL, -1);
-		            lua_writestringerror("error in line callback: %s\n", msg);
-		            lua_pop(TL, 1);
-			    }                        
-                
-                line_buff_last -= (pos-line_buff+1);
-                pos = memchr(line_buff, (char)10, line_buff_last);
-            }
-        }
         break;
     case ESP_SPP_CONG_EVT:
         syslog(LOG_INFO, "ESP_SPP_CONG_EVT");
