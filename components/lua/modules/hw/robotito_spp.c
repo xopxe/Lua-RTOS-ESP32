@@ -70,7 +70,7 @@ static const esp_spp_sec_t sec_mask = ESP_SPP_SEC_AUTHENTICATE;
 static const esp_spp_role_t role_slave = ESP_SPP_ROLE_SLAVE;
 
 //static xQueueHandle spp_rcv_queue = NULL;
-#define STREAM_BUFFER_SIZE_BYTES 1000
+#define STREAM_BUFFER_SIZE_BYTES 1028
 RingbufHandle_t stream_buffer_handle;
 
 static void print_speed(void)
@@ -85,73 +85,47 @@ static void print_speed(void)
     time_old.tv_usec = time_new.tv_usec;
 }
 
-/*
+
 void spp_rcv_task(void * arg)
 {   
-    esp_spp_cb_param_t * param;
-
     for(;;){
         vTaskDelay(50 / portTICK_PERIOD_MS);
-        if(xQueueReceive(spp_rcv_queue, &param, portMAX_DELAY)) {
-		    //prepare thread
-			lua_State *L = pvGetLuaState();
-			lua_State *TL = lua_newthread(L);
-			int tref = luaL_ref(L, LUA_REGISTRYINDEX);
-			lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_spp_rcv_callback);
-			lua_xmove(L, TL, 1);
+        
+		size_t item_size;
+	    char *item = (char *)xRingbufferReceiveUpTo(stream_buffer_handle, 
+	    		&item_size, 
+	    		portMAX_DELAY, 
+	    		STREAM_BUFFER_SIZE_BYTES);
+       
+		if (item != NULL) {
+			if (robotito_spp_rcv_callback!=LUA_REFNIL) {	
+				//prepare thread
+				lua_State *L = pvGetLuaState();
+				lua_State *TL = lua_newthread(L);
+				int tref = luaL_ref(L, LUA_REGISTRYINDEX);
+				lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_spp_rcv_callback);
+				lua_xmove(L, TL, 1);
 
-			lua_pushlstring(TL, (char*)param->data_ind.data, param->data_ind.len);
-		    int status = lua_pcall(TL, 1, 0, 0);
-		    luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+				lua_pushlstring(TL, item, item_size);
+			    vRingbufferReturnItem(stream_buffer_handle, (void *)item);
 
-		    if (status != LUA_OK) {
-			    const char *msg = lua_tostring(TL, -1);
-			    lua_writestringerror("error in rcv callback: %s\n", msg);
-			    lua_pop(TL, 1);
+				int status = lua_pcall(TL, 1, 0, 0);
+				luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+				if (status != LUA_OK) {
+					const char *msg = lua_tostring(TL, -1);
+					lua_writestringerror("error in rcv callback: %s\n", msg);
+					lua_pop(TL, 1);
+				}
 			}
-        }
+        } else {
+        	//Failed to receive item
+        	printf("Failed to receive item\n");
+    	}
     }
     vTaskDelete(NULL);
 }
-*/
 
-void vSendCallbackFunction( StreamBufferHandle_t xStreamBuffer,
-                            BaseType_t xIsInsideISR,
-                            BaseType_t * const pxHigherPriorityTaskWoken )
-{
-	uint8_t ucRxData[ 20 ];
-	size_t xReceivedBytes;
-	const TickType_t xBlockTime = portMAX_DELAY; //xBlockTime = pdMS_TO_TICKS( 20 );
-	
-	xReceivedBytes = xStreamBufferReceive( xStreamBuffer,
-                                           ( void * ) ucRxData,
-                                           sizeof( ucRxData ),
-                                           xBlockTime );
-
-    if( xReceivedBytes > 0 )
-    {
-        /* A ucRxData contains another xRecievedBytes bytes of data, which can
-        be processed here.... */
-        
-	    //prepare thread
-		lua_State *L = pvGetLuaState();
-		lua_State *TL = lua_newthread(L);
-		int tref = luaL_ref(L, LUA_REGISTRYINDEX);
-		lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_spp_rcv_callback);
-		lua_xmove(L, TL, 1);
-
-		lua_pushlstring(TL, (char*)ucRxData, xRecievedBytes);
-	    int status = lua_pcall(TL, 1, 0, 0);
-	    luaL_unref(TL, LUA_REGISTRYINDEX, tref);
-
-	    if (status != LUA_OK) {
-		    const char *msg = lua_tostring(TL, -1);
-		    lua_writestringerror("error in rcv callback: %s\n", msg);
-		    lua_pop(TL, 1);
-		}
-        
-    }
-}
 
 static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
 {
@@ -186,35 +160,15 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
         if (time_new.tv_sec - time_old.tv_sec >= 3) {
             print_speed();
         }
-        
-        
-		const TickType_t x100ms = pdMS_TO_TICKS( 100 );
-		if (robotito_spp_rcv_callback!=LUA_REFNIL) {
-			xBytesSent = xStreamBufferSend( xStreamBuffer,
-                                   ( void * ) param->data_ind.data,
-                                   sizeof( param->data_ind.len ),
-                                   x100ms );			
-			
-			//xQueueSend(spp_rcv_queue,&param,10/portTICK_PERIOD_MS);
-/*
-		    //prepare thread
-			lua_State *L = pvGetLuaState();
-			lua_State *TL = lua_newthread(L);
-			int tref = luaL_ref(L, LUA_REGISTRYINDEX);
-			lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_spp_rcv_callback);
-			lua_xmove(L, TL, 1);
 
-			lua_pushlstring(TL, (char*)param->data_ind.data, param->data_ind.len);
-		    int status = lua_pcall(TL, 1, 0, 0);
-		    luaL_unref(TL, LUA_REGISTRYINDEX, tref);
-
-		    if (status != LUA_OK) {
-			    const char *msg = lua_tostring(TL, -1);
-			    lua_writestringerror("error in rcv callback: %s\n", msg);
-			    lua_pop(TL, 1);
-			}
-*/
-		}
+	    UBaseType_t res =  xRingbufferSend(stream_buffer_handle, 
+	    			( void * ) param->data_ind.data, 
+	    			param->data_ind.len, 
+	    			pdMS_TO_TICKS(100));
+	    if (res != pdTRUE) {
+	        printf("Failed to send item\n"); //TODO
+	    }        
+        
         if (robotito_spp_line_callback!=LUA_REFNIL) {
             if (line_buff_last+param->data_ind.len>CONFIG_ROBOTITO_SPP_LINEBUFFER) {
                 // if buffer overflow, send current buffer in error output
@@ -340,6 +294,7 @@ void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         syslog(LOG_INFO, "event: %d", event);
         break;
     }
+    }
     return;
 }
 
@@ -418,15 +373,16 @@ static int robotito_spp_init (lua_State *L) {
 #endif
 
     //spp_rcv_queue = xQueueCreate(1, sizeof(uint32_t));
-    //xTaskCreate(spp_rcv_task, "spp_rcv_task", 4096, NULL, 10, NULL);
-	const size_t xTriggerLevel = 1;
-	xStreamBufferWithCallback = xStreamBufferCreateStaticWithCallback(
-	                                STREAM_BUFFER_SIZE_BYTES,
-                                    xTriggerLevel,
-                                    ucStreamBufferWithCallbackStorage,
-                                    &xStreamBufferWithCallbackStruct,
-                                    vSendCallbackFunction,
-                                    NULL );   
+    xTaskCreate(spp_rcv_task, "spp_rcv_task", 4096, NULL, 10, NULL);
+    //Create ring buffer
+    stream_buffer_handle = xRingbufferCreate(STREAM_BUFFER_SIZE_BYTES, RINGBUF_TYPE_BYTEBUF);
+    if (stream_buffer_handle == NULL) {
+        syslog(LOG_ERR,  "%s failed to create ring buffer\n", __func__);
+        lua_pushnil(L);
+        lua_pushstring(L, "failed to create ring buffer");
+        return 2;
+    }
+    
 
     /*
      * Set default parameters for Legacy Pairing
