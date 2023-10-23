@@ -71,9 +71,7 @@ static const esp_spp_role_t role_slave = ESP_SPP_ROLE_SLAVE;
 
 //static xQueueHandle spp_rcv_queue = NULL;
 #define STREAM_BUFFER_SIZE_BYTES 1000
-static uint8_t ucStreamBufferWithCallbackStorage[ STREAM_BUFFER_SIZE_BYTES + 1 ];
-StaticStreamBuffer_t xStreamBufferWithCallbackStruct;
-StreamBufferHandle_t xStreamBufferWithCallback;
+RingbufHandle_t stream_buffer_handle;
 
 static void print_speed(void)
 {
@@ -341,7 +339,6 @@ void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
     default: {
         syslog(LOG_INFO, "event: %d", event);
         break;
-    }
     }
     return;
 }
