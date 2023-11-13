@@ -62,6 +62,7 @@
 #include "nvs_flash.h"
 #include "esp_bt.h"
 #include "string.h"
+#include "freertos/ringbuf.h"
 
 #include "esp_gap_ble_api.h"
 #include "esp_gatts_api.h"
@@ -88,6 +89,8 @@ int line_buff_last = 0;
 #define SAMPLE_DEVICE_NAME          "ESP_SPP_SERVER"
 #define SPP_SVC_INST_ID	            0
 
+const char *ble_device_name = NULL;
+
 /// SPP Service
 static const uint16_t spp_service_uuid = 0xABF0;
 /// Characteristic UUID
@@ -110,6 +113,9 @@ static uint16_t spp_mtu_size = 23;
 static uint16_t spp_conn_id = 0xffff;
 static esp_gatt_if_t spp_gatts_if = 0xff;
 static xQueueHandle cmd_cmd_queue = NULL;
+
+#define STREAM_BUFFER_SIZE_BYTES 1028
+RingbufHandle_t stream_buffer_handle;
 
 #ifdef SUPPORT_HEARTBEAT
 static xQueueHandle cmd_heartbeat_queue = NULL;
@@ -365,6 +371,100 @@ static void print_write_buffer(void)
 }
 */
 
+
+void spp_rcv_task(void * arg)
+{   
+    for(;;){
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+        
+		size_t item_size;
+	    char *item = (char *)xRingbufferReceiveUpTo(stream_buffer_handle, 
+	    		&item_size, 
+	    		portMAX_DELAY, 
+	    		STREAM_BUFFER_SIZE_BYTES);
+       
+		if (item != NULL) {
+			if (robotito_ble_rcv_callback!=LUA_REFNIL) {	
+				//prepare thread
+				lua_State *L = pvGetLuaState();
+				lua_State *TL = lua_newthread(L);
+				int tref = luaL_ref(L, LUA_REGISTRYINDEX);
+				lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_ble_rcv_callback);
+				lua_xmove(L, TL, 1);
+
+				lua_pushlstring(TL, item, item_size);
+			    vRingbufferReturnItem(stream_buffer_handle, (void *)item);
+
+				int status = lua_pcall(TL, 1, 0, 0);
+				luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+				if (status != LUA_OK) {
+					const char *msg = lua_tostring(TL, -1);
+					lua_writestringerror("error in rcv callback: %s\n", msg);
+					lua_pop(TL, 1);
+				}
+			}
+	        if (robotito_ble_line_callback!=LUA_REFNIL) {
+		        if (line_buff_last+item_size>CONFIG_ROBOTITO_SPP_LINEBUFFER) {
+		            // if buffer overflow, send current buffer in error output
+		            //prepare thread
+					lua_State *L = pvGetLuaState();
+					lua_State *TL = lua_newthread(L);
+					int tref = luaL_ref(L, LUA_REGISTRYINDEX);
+					lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_ble_line_callback);
+					lua_xmove(L, TL, 1);
+
+		            lua_pushnil(TL);
+					lua_pushlstring(TL, (char*)line_buff, line_buff_last);
+					line_buff_last = 0;
+		            int status = lua_pcall(TL, 2, 0, 0);
+		            luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+		            if (status != LUA_OK) {
+				        const char *msg = lua_tostring(TL, -1);
+				        lua_writestringerror("error in line callback: %s\n", msg);
+				        lua_pop(TL, 1);
+					}    
+					
+		        }
+		        memcpy(line_buff+line_buff_last, item, item_size);
+		        int start_search = line_buff_last;
+		        line_buff_last += item_size;
+		        char *pos = memchr(line_buff+start_search, (char)10, line_buff_last-start_search);
+		        while ( pos ) {
+		            
+		            //prepare thread
+					lua_State *L = pvGetLuaState();
+					lua_State *TL = lua_newthread(L);
+					int tref = luaL_ref(L, LUA_REGISTRYINDEX);
+					lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_ble_line_callback);
+					lua_xmove(L, TL, 1);
+
+					lua_pushlstring(TL, line_buff, pos-line_buff);
+					memcpy(line_buff, pos+1, line_buff+line_buff_last-pos-1);
+		            int status = lua_pcall(TL, 1, 0, 0);
+		            luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+		            if (status != LUA_OK) {
+				        const char *msg = lua_tostring(TL, -1);
+				        lua_writestringerror("error in line callback: %s\n", msg);
+				        lua_pop(TL, 1);
+					}                        
+		            
+		            line_buff_last -= (pos-line_buff+1);
+		            pos = memchr(line_buff, (char)10, line_buff_last);
+		        }
+		    }
+
+        } else {
+        	//Failed to receive item
+        	printf("Failed to receive item\n");
+    	}
+    }
+    vTaskDelete(NULL);
+}
+
+
 #ifdef SUPPORT_HEARTBEAT
 void spp_heartbeat_task(void * arg)
 {
@@ -399,9 +499,11 @@ void spp_cmd_task(void * arg)
         vTaskDelay(50 / portTICK_PERIOD_MS);
         if(xQueueReceive(cmd_cmd_queue, &cmd_id, portMAX_DELAY)) {
             //esp_log_buffer_char(GATTS_TABLE_TAG,(char *)(cmd_id),strlen((char *)cmd_id));
+            printf("command: ");
             for (int i=0; i<strlen((char*)cmd_id); i++ ) {
 	        	printf("%c", cmd_id[i]);
 	        }
+            printf("\n");
 
             free(cmd_id);
         }
@@ -451,7 +553,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
     switch (event) {
     	case ESP_GATTS_REG_EVT:
     	    syslog(LOG_INFO, "%s %d\n", __func__, __LINE__);
-        	esp_ble_gap_set_device_name(SAMPLE_DEVICE_NAME);
+        	esp_ble_gap_set_device_name(ble_device_name);
 
         	syslog(LOG_INFO, "%s %d\n", __func__, __LINE__);
         	esp_ble_gap_config_adv_data_raw((uint8_t *)spp_adv_data, sizeof(spp_adv_data));
@@ -508,6 +610,17 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
         			}
 					printf("\n");
 #endif
+					UBaseType_t res =  xRingbufferSend(stream_buffer_handle, 
+								( void * )p_data->write.value, 
+								p_data->write.len, 
+								pdMS_TO_TICKS(100));
+					if (res != pdTRUE) {
+						printf("Failed to send item\n"); //TODO
+					}   
+
+
+////////////////////////////////////
+/*
                     if (robotito_ble_rcv_callback!=LUA_REFNIL) {
 
 		                //prepare thread
@@ -578,6 +691,9 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
                             pos = memchr(line_buff, (char)10, line_buff_last);
                         }
                     }
+                    */
+                    /////////////////////////////////
+                    
                 }else{
                     //TODO:
                 }
@@ -695,6 +811,15 @@ static int robotito_ble_init (lua_State *L) {
 
 	printf("initializing robotito_ble\n");
   
+ 	const char* name = luaL_checkstring(L, 1);
+	if (name) {
+		ble_device_name = strdup(name);
+	  	printf("ble device name: %s \n", ble_device_name);
+    } else {
+		ble_device_name = SAMPLE_DEVICE_NAME;
+	  	printf("ble device name (default): %s \n", ble_device_name);
+    }
+  
 	esp_err_t ret;
 	esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
 
@@ -738,10 +863,21 @@ static int robotito_ble_init (lua_State *L) {
         lua_pushstring(L, "enable bluetooth failed");
         return 2;
 	}
-
+	
 	esp_ble_gatts_register_callback(gatts_event_handler);
 	esp_ble_gap_register_callback(gap_event_handler);
 	esp_ble_gatts_app_register(ESP_SPP_APP_ID);
+
+	//spp_rcv_queue = xQueueCreate(1, sizeof(uint32_t));
+    xTaskCreate(spp_rcv_task, "spp_rcv_task", 4096, NULL, 10, NULL);
+    //Create ring buffer
+    stream_buffer_handle = xRingbufferCreate(STREAM_BUFFER_SIZE_BYTES, RINGBUF_TYPE_BYTEBUF);
+    if (stream_buffer_handle == NULL) {
+        syslog(LOG_ERR,  "%s failed to create ring buffer\n", __func__);
+        lua_pushnil(L);
+        lua_pushstring(L, "failed to create ring buffer");
+        return 2;
+    }
 
 	spp_task_init();
  
