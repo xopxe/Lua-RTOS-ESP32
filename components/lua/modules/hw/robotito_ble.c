@@ -86,7 +86,7 @@ int line_buff_last = 0;
 #define SPP_PROFILE_NUM             1
 #define SPP_PROFILE_APP_IDX         0
 #define ESP_SPP_APP_ID              0x56
-#define SAMPLE_DEVICE_NAME          "ESP_SPP_SERVER"
+#define SAMPLE_DEVICE_NAME          "ROBOTITO_SPP_SERVER"
 #define SPP_SVC_INST_ID	            0
 
 const char *ble_device_name = NULL;
@@ -103,11 +103,17 @@ static const uint16_t spp_service_uuid = 0xABF0;
 #define ESP_GATT_UUID_SPP_HEARTBEAT         0xABF5
 #endif
 
+//max length 31
+/*
 static const uint8_t spp_adv_data[23] = {
     0x02,0x01,0x06,
     0x03,0x03,0xF0,0xAB,
     0x0F,0x09,0x45,0x53,0x50,0x5f,0x53,0x50,0x50,0x5f,0x53,0x45,0x52,0x56,0x45,0x52
 };
+*/
+uint8_t *spp_adv_data = NULL;
+size_t spp_adv_data_size = 0;
+
 
 static uint16_t spp_mtu_size = 23;
 static uint16_t spp_conn_id = 0xffff;
@@ -553,10 +559,11 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
     switch (event) {
     	case ESP_GATTS_REG_EVT:
     	    syslog(LOG_INFO, "%s %d\n", __func__, __LINE__);
+    	    printf("calling esp_ble_gap_set_device_name with %s\n", ble_device_name);
         	esp_ble_gap_set_device_name(ble_device_name);
 
         	syslog(LOG_INFO, "%s %d\n", __func__, __LINE__);
-        	esp_ble_gap_config_adv_data_raw((uint8_t *)spp_adv_data, sizeof(spp_adv_data));
+        	esp_ble_gap_config_adv_data_raw((uint8_t *)spp_adv_data, spp_adv_data_size);
 
         	syslog(LOG_INFO, "%s %d\n", __func__, __LINE__);
         	esp_ble_gatts_create_attr_tab(spp_gatt_db, gatts_if, SPP_IDX_NB, SPP_SVC_INST_ID);
@@ -810,15 +817,42 @@ static int robotito_ble_init (lua_State *L) {
 	}
 
 	printf("initializing robotito_ble\n");
-  
+    
  	const char* name = luaL_checkstring(L, 1);
 	if (name) {
 		ble_device_name = strdup(name);
-	  	printf("ble device name: %s \n", ble_device_name);
+	  	printf("  ble device name: %s \n", ble_device_name);
     } else {
 		ble_device_name = SAMPLE_DEVICE_NAME;
-	  	printf("ble device name (default): %s \n", ble_device_name);
+	  	printf("  ble device name (default): %s \n", ble_device_name);
     }
+    
+  
+  	/*  
+    static const uint8_t spp_adv_data[23] = {
+    0x02,0x01,0x06,
+    0x03,0x03,0xF0,0xAB,
+    0x0F,0x09,0x45,0x53,0x50,0x5f,0x53,0x50,0x50,0x5f,0x53,0x45,0x52,0x56,0x45,0x52
+    };*/
+    size_t ble_device_name_length = strlen(ble_device_name);
+	spp_adv_data_size = 9+ble_device_name_length;
+	if (spp_adv_data_size>31) {
+	    syslog(LOG_ERR, "ble device name too long\n");
+        lua_pushnil(L);
+        lua_pushstring(L, "ble device name too long");
+        return 2;
+	} 
+	spp_adv_data = malloc(sizeof(uint8_t)*spp_adv_data_size);
+	spp_adv_data[0]=0x02; spp_adv_data[1]=0x01; spp_adv_data[2]=0x06;
+	spp_adv_data[3]=0x03; spp_adv_data[4]=0x03; spp_adv_data[5]=0xF0; spp_adv_data[6]=0xAB;
+	spp_adv_data[7]=ble_device_name_length; spp_adv_data[8]=0x09;
+	memcpy(spp_adv_data+9, ble_device_name, ble_device_name_length);
+	
+	printf ("adv (len=%u):", spp_adv_data_size);
+	for (size_t i=0; i<spp_adv_data_size; i++) {
+	  printf(" %02X", spp_adv_data[i]);
+	}
+	printf ("\n");
   
 	esp_err_t ret;
 	esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();

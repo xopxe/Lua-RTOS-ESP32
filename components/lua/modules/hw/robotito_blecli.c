@@ -134,7 +134,7 @@ static esp_ble_scan_params_t ble_scan_params = {
     .scan_duplicate         = BLE_SCAN_DUPLICATE_DISABLE
 };
 
-static const char device_name[] = "ESP_SPP_SERVER";
+static const char device_name[] = "robotito"; // "ESP_SPP_SERVER";
 static bool is_connect = false;
 static uint16_t spp_conn_id = 0;
 static uint16_t spp_mtu_size = 23;
@@ -297,12 +297,13 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             //esp_log_buffer_hex(GATTC_TAG, scan_result->scan_rst.bda, 6);
             syslog(LOG_INFO, "Searched Adv Data Len %d, Scan Response Len %d", scan_result->scan_rst.adv_data_len, scan_result->scan_rst.scan_rsp_len);
             adv_name = esp_ble_resolve_adv_data(scan_result->scan_rst.ble_adv, ESP_BLE_AD_TYPE_NAME_CMPL, &adv_name_len);
-            syslog(LOG_INFO, "Searched Device Name Len %d", adv_name_len);
+            syslog(LOG_INFO, "Searched Device Name %.*s (Len %d)", adv_name_len, (char*)adv_name, adv_name_len);
             //esp_log_buffer_char(GATTC_TAG, adv_name, adv_name_len);
-            syslog(LOG_INFO, "\n");
+            //syslog(LOG_INFO, "\n");
             if (adv_name != NULL) {
                 if ( strncmp((char *)adv_name, device_name, adv_name_len) == 0) {
                     memcpy(&(scan_rst), scan_result, sizeof(esp_ble_gap_cb_param_t));
+                    printf("found device: %.*s", adv_name_len, adv_name);
                     esp_ble_gap_stop_scanning();
                 }
             }
