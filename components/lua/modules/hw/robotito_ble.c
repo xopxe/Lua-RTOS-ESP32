@@ -120,7 +120,7 @@ static uint16_t spp_conn_id = 0xffff;
 static esp_gatt_if_t spp_gatts_if = 0xff;
 static xQueueHandle cmd_cmd_queue = NULL;
 
-#define STREAM_BUFFER_SIZE_BYTES 1028
+#define STREAM_BUFFER_SIZE_BYTES CONFIG_ROBOTITO_BLE_LINEBUFFER
 RingbufHandle_t stream_buffer_handle;
 
 #ifdef SUPPORT_HEARTBEAT
@@ -411,7 +411,7 @@ void spp_rcv_task(void * arg)
 				}
 			}
 	        if (robotito_ble_line_callback!=LUA_REFNIL) {
-		        if (line_buff_last+item_size>CONFIG_ROBOTITO_SPP_LINEBUFFER) {
+		        if (line_buff_last+item_size>CONFIG_ROBOTITO_BLE_LINEBUFFER) {
 		            // if buffer overflow, send current buffer in error output
 		            //prepare thread
 					lua_State *L = pvGetLuaState();
@@ -903,7 +903,7 @@ static int robotito_ble_init (lua_State *L) {
 	esp_ble_gatts_app_register(ESP_SPP_APP_ID);
 
 	//spp_rcv_queue = xQueueCreate(1, sizeof(uint32_t));
-    xTaskCreate(spp_rcv_task, "spp_rcv_task", 4096, NULL, 10, NULL);
+    xTaskCreate(spp_rcv_task, "spp_rcv_task", CONFIG_ROBOTITO_BLE_STACK_SIZE, NULL, 10, NULL);
     //Create ring buffer
     stream_buffer_handle = xRingbufferCreate(STREAM_BUFFER_SIZE_BYTES, RINGBUF_TYPE_BYTEBUF);
     if (stream_buffer_handle == NULL) {

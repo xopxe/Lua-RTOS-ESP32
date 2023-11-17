@@ -1530,21 +1530,23 @@ menu "Lua RTOS"
 		           help
 		             I2C port speed in hertz
 		    endmenu
-		    
 		    menu "ROBOTITO_BLE"
 		    	config ROBOTITO_BLE_LINEBUFFER
-		    	int "line buffer size"
-		    	default 1024
-	            depends on !ROBOTITO_SPP
-		    	help
-		    		Size of the buffer where data is accumulated
+		    		int "line buffer size"
+			    	default 1024
+			    	help
+			    		Size of the buffer where data is accumulated
+		    		
+		    	config ROBOTITO_BLE_STACK_SIZE
+			    	int "line buffer size"
+			    	default 4096
+			    	help
+			    		Stack size for receiver callback
 		    endmenu
-
 		    menu "ROBOTITO_SPP"
 		    	config ROBOTITO_SPP_LINEBUFFER
 		    	int "line buffer size"
 		    	default 1024
-	            depends on !ROBOTITO_BLE
 		    	help
 		    		Size of the buffer where data is accumulated
 		    endmenu
@@ -1862,18 +1864,22 @@ menu "Lua RTOS"
                
             config LUA_RTOS_LUA_USE_ROBOTITO_BLE
                bool "Include robotito BLE driver"
+               depends on !ROBOTITO_SPP
                default n
 
             config LUA_RTOS_LUA_USE_ROBOTITO_BLECLI
                bool "Include robotito BLE test client"
+               depends on !ROBOTITO_SPP
                default n
 
             config LUA_RTOS_LUA_USE_ROBOTITO_SPP
                bool "Include robotito Bluetooth Classic SPP driver"
+               depends on !ROBOTITO_BLE
                default y
 
             config LUA_RTOS_LUA_USE_ROBOTITO_SPPCLI
                bool "Include robotito Bluetooth Classic SPP test client"
+               depends on !ROBOTITO_BLE
                default y
                
             config LUA_RTOS_LUA_USE_THREAD

@@ -70,7 +70,7 @@ static const esp_spp_sec_t sec_mask = ESP_SPP_SEC_AUTHENTICATE;
 static const esp_spp_role_t role_slave = ESP_SPP_ROLE_SLAVE;
 
 //static xQueueHandle spp_rcv_queue = NULL;
-#define STREAM_BUFFER_SIZE_BYTES 1028
+#define STREAM_BUFFER_SIZE_BYTES CONFIG_ROBOTITO_SPP_LINEBUFFER
 RingbufHandle_t stream_buffer_handle;
 
 static void print_speed(void)
