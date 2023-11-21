@@ -1533,7 +1533,7 @@ menu "Lua RTOS"
 		    menu "ROBOTITO_BLE"
 		    	config ROBOTITO_BLE_LINEBUFFER
 		    		int "line buffer size"
-			    	default 1024
+			    	default 1028
 			    	help
 			    		Size of the buffer where data is accumulated
 		    		
