@@ -845,7 +845,7 @@ static int robotito_ble_init (lua_State *L) {
 	spp_adv_data = malloc(sizeof(uint8_t)*spp_adv_data_size);
 	spp_adv_data[0]=0x02; spp_adv_data[1]=0x01; spp_adv_data[2]=0x06;
 	spp_adv_data[3]=0x03; spp_adv_data[4]=0x03; spp_adv_data[5]=0xF0; spp_adv_data[6]=0xAB;
-	spp_adv_data[7]=ble_device_name_length; spp_adv_data[8]=0x09;
+	spp_adv_data[7]=ble_device_name_length+1; spp_adv_data[8]=0x09;
 	memcpy(spp_adv_data+9, ble_device_name, ble_device_name_length);
 	
 	printf ("adv (len=%u):", spp_adv_data_size);
