@@ -303,7 +303,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             if (adv_name != NULL) {
                 if ( strncmp((char *)adv_name, device_name, adv_name_len) == 0) {
                     memcpy(&(scan_rst), scan_result, sizeof(esp_ble_gap_cb_param_t));
-                    printf("found device: %.*s", adv_name_len, adv_name);
+                    printf("found device: %.*s\n", adv_name_len, adv_name);
                     esp_ble_gap_stop_scanning();
                 }
             }
@@ -700,10 +700,12 @@ static int robotito_blecli_init (lua_State *L) {
 }
 
 static int robotito_blecli_send (lua_State *L) {
-	printf("robotito_blecli send\n");
+	printf("robotito_blecli sending: ");
 
 	size_t length;
 	const uint8_t *string = (uint8_t *) luaL_checklstring(L, 1, &length);
+	
+	printf("%.*s\n", length, string);
 
 ///////////////////////////////////////+
     uint8_t *temp = (uint8_t *)malloc(sizeof(uint8_t)*length);
