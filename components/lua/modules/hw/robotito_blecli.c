@@ -42,7 +42,6 @@
  * Lua RTOS, Lua robotito BLE module *
  */
  
-#define SPP_DEBUG_MODE
 
 #include "sdkconfig.h"
 #if CONFIG_LUA_RTOS_LUA_USE_ROBOTITO_BLECLI
@@ -79,6 +78,8 @@
 #define BT_BD_ADDR_HEX(addr)        addr[0],addr[1],addr[2],addr[3],addr[4],addr[5]
 #define ESP_GATT_SPP_SERVICE_UUID   0xABF0
 #define SCAN_ALL_THE_TIME           0
+
+bool robotito_blecli_initialized = false;
 
 struct gattc_profile_inst {
     esp_gattc_cb_t gattc_cb;
@@ -149,7 +150,7 @@ static uint16_t count = SPP_IDX_NB;
 static esp_gattc_db_elem_t *db = NULL;
 static esp_ble_gap_cb_param_t scan_rst;
 static xQueueHandle cmd_reg_queue = NULL;
-QueueHandle_t spp_uart_queue_cli = NULL;
+//QueueHandle_t spp_uart_queue_cli = NULL;
 
 #ifdef SUPPORT_HEARTBEAT
 static uint8_t  heartbeat_s[9] = {'E','s','p','r','e','s','s','i','f'};
@@ -172,66 +173,27 @@ static void notify_event_handler(esp_ble_gattc_cb_param_t * p_data)
     }
     handle = p_data->notify.handle;
     if(handle == db[SPP_IDX_SPP_DATA_NTY_VAL].attribute_handle){
-#ifdef SPP_DEBUG_MODE
         //esp_log_buffer_char(GATTC_TAG, (char *)p_data->notify.value, p_data->notify.value_len);
+      	printf("robotito_blecli read: ");
         for (int i=0; i<p_data->notify.value_len; i++ ) {
         	printf("%c", p_data->notify.value[i]);
         }
-#else
-        if((p_data->notify.value[0] == '#')&&(p_data->notify.value[1] == '#')){
-            if((++notify_value_count) != p_data->notify.value[3]){
-                if(notify_value_p != NULL){
-                    free(notify_value_p);
-                }
-                notify_value_count = 0;
-                notify_value_p = NULL;
-                notify_value_offset = 0;
-                syslog(LOG_ERR, "notify value count is not continuous,%s\n",__func__);
-                return;
-            }
-            if(p_data->notify.value[3] == 1){
-                notify_value_p = (char *)malloc(((spp_mtu_size-7)*(p_data->notify.value[2]))*sizeof(char));
-                if(notify_value_p == NULL){
-                    syslog(LOG_ERR, "malloc failed,%s L#%d\n",__func__,__LINE__);
-                    notify_value_count = 0;
-                    return;
-                }
-                memcpy((notify_value_p + notify_value_offset),(p_data->notify.value + 4),(p_data->notify.value_len - 4));
-                if(p_data->notify.value[2] == p_data->notify.value[3]){
-                    uart_write_bytes(UART_NUM_1, (char *)(notify_value_p), (p_data->notify.value_len - 4 + notify_value_offset));
-                    free(notify_value_p);
-                    notify_value_p = NULL;
-                    notify_value_offset = 0;
-                    return;
-                }
-                notify_value_offset += (p_data->notify.value_len - 4);
-            }else if(p_data->notify.value[3] <= p_data->notify.value[2]){
-                memcpy((notify_value_p + notify_value_offset),(p_data->notify.value + 4),(p_data->notify.value_len - 4));
-                if(p_data->notify.value[3] == p_data->notify.value[2]){
-                    uart_write_bytes(UART_NUM_1, (char *)(notify_value_p), (p_data->notify.value_len - 4 + notify_value_offset));
-                    free(notify_value_p);
-                    notify_value_count = 0;
-                    notify_value_p = NULL;
-                    notify_value_offset = 0;
-                    return;
-                }
-                notify_value_offset += (p_data->notify.value_len - 4);
-            }
-        }else{
-            uart_write_bytes(UART_NUM_1, (char *)(p_data->notify.value), p_data->notify.value_len);
-        }
-#endif
+      	printf("\n");
     }else if(handle == ((db+SPP_IDX_SPP_STATUS_VAL)->attribute_handle)){
         //esp_log_buffer_char(GATTC_TAG, (char *)p_data->notify.value, p_data->notify.value_len);
+      	printf("robotito_blecli status: ");
         for (int i=0; i<p_data->notify.value_len; i++ ) {
         	printf("%c", p_data->notify.value[i]);
         }
+      	printf("\n");
         //TODO:server notify status characteristic
     }else{
         //esp_log_buffer_char(GATTC_TAG, (char *)p_data->notify.value, p_data->notify.value_len);
+      	printf("robotito_blecli else: ");
         for (int i=0; i<p_data->notify.value_len; i++ ) {
         	printf("%c", p_data->notify.value[i]);
         }
+      	printf("\n");
     }
 }
 
@@ -433,7 +395,9 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
         switch(cmd){
         case SPP_IDX_SPP_DATA_NTY_VAL:
             cmd = SPP_IDX_SPP_STATUS_VAL;
-            xQueueSend(cmd_reg_queue, &cmd,10/portTICK_PERIOD_MS);
+            if (xQueueSend(cmd_reg_queue, &cmd,10/portTICK_PERIOD_MS)) {
+            	printf('cmd_reg_queue queue full B\n');
+            }
             break;
         case SPP_IDX_SPP_STATUS_VAL:
 #ifdef SUPPORT_HEARTBEAT
@@ -501,7 +465,9 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
             }
         }
         cmd = SPP_IDX_SPP_DATA_NTY_VAL;
-        xQueueSend(cmd_reg_queue, &cmd, 10/portTICK_PERIOD_MS);
+        if (xQueueSend(cmd_reg_queue, &cmd, 10/portTICK_PERIOD_MS)) {
+	    	printf('cmd_reg_queue queue full A\n');
+        }
         break;
     case ESP_GATTC_SRVC_CHG_EVT:
         break;
@@ -583,7 +549,7 @@ void ble_client_appRegister(void)
         syslog(LOG_ERR, "set local  MTU failed: %s", esp_err_to_name_r(local_mtu_ret, err_msg, sizeof(err_msg)));
     }
 
-    cmd_reg_queue = xQueueCreate(10, sizeof(uint32_t));
+    cmd_reg_queue = xQueueCreate(100, sizeof(uint32_t));
     xTaskCreate(spp_client_reg_task, "spp_client_reg_task", 2048, NULL, 10, NULL);
 
 #ifdef SUPPORT_HEARTBEAT
@@ -592,64 +558,14 @@ void ble_client_appRegister(void)
 #endif
 }
 
-void uart_task_cli(void *pvParameters)
-{
-    uart_event_t event;
-    for (;;) {
-        //Waiting for UART event.
-        if (xQueueReceive(spp_uart_queue_cli, (void * )&event, (portTickType)portMAX_DELAY)) {
-            switch (event.type) {
-            //Event of UART receving data
-            case UART_DATA:
-                if (event.size && (is_connect == true) && ((db+SPP_IDX_SPP_DATA_RECV_VAL)->properties & (ESP_GATT_CHAR_PROP_BIT_WRITE_NR | ESP_GATT_CHAR_PROP_BIT_WRITE))) {
-                    uint8_t * temp = NULL;
-                    temp = (uint8_t *)malloc(sizeof(uint8_t)*event.size);
-                    if(temp == NULL){
-                        syslog(LOG_ERR, "malloc failed,%s L#%d\n", __func__, __LINE__);
-                        break;
-                    }
-                    memset(temp, 0x0, event.size);
-                    uart_read_bytes(UART_NUM_1,temp,event.size,portMAX_DELAY);
-                    esp_ble_gattc_write_char( spp_gattc_if,
-                                              spp_conn_id,
-                                              (db+SPP_IDX_SPP_DATA_RECV_VAL)->attribute_handle,
-                                              event.size,
-                                              temp,
-                                              ESP_GATT_WRITE_TYPE_RSP,
-                                              ESP_GATT_AUTH_REQ_NONE);
-                    free(temp);
-                }
-                break;
-            default:
-                break;
-            }
-        }
-    }
-    vTaskDelete(NULL);
-}
-
-static void spp_uart_init(void)
-{
-    uart_config_t uart_config = {
-        .baud_rate = 115200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_RTS,
-        .rx_flow_ctrl_thresh = 122,
-    };
-
-    //Set UART parameters
-    uart_param_config(UART_NUM_1, &uart_config);
-    //Set UART pins
-    uart_set_pin(UART_NUM_1, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    //Install UART driver, and get the queue.
-    uart_driver_install(UART_NUM_1, 4096, 8192, 10, &spp_uart_queue_cli, 0);
-    xTaskCreate(uart_task_cli, "uTask", 2048, (void*)UART_NUM_1, 8, NULL);
-}
-
-
 static int robotito_blecli_init (lua_State *L) {
+	if (robotito_blecli_initialized) {
+	    syslog(LOG_WARNING, "already initialized\n");
+        lua_pushnil(L);
+        lua_pushstring(L, "already initialized");
+        return 2;
+	}
+
 	printf("initializing robotito_blecli\n");
 	
     esp_err_t ret;
@@ -692,8 +608,9 @@ static int robotito_blecli_init (lua_State *L) {
     }
  
     ble_client_appRegister();
-    spp_uart_init();	
+    //spp_uart_init();	
 	
+ 	robotito_blecli_initialized =  true;
 	
     lua_pushboolean(L, true);
     return 1;
@@ -701,32 +618,35 @@ static int robotito_blecli_init (lua_State *L) {
 
 static int robotito_blecli_send (lua_State *L) {
 	printf("robotito_blecli sending: ");
-
-	size_t length;
-	const uint8_t *string = (uint8_t *) luaL_checklstring(L, 1, &length);
 	
-	printf("%.*s\n", length, string);
+	if ((is_connect == true) && 
+	((db+SPP_IDX_SPP_DATA_RECV_VAL)->properties & (ESP_GATT_CHAR_PROP_BIT_WRITE_NR | ESP_GATT_CHAR_PROP_BIT_WRITE))) {
+
+		size_t length;
+		const uint8_t *string = (uint8_t *) luaL_checklstring(L, 1, &length);
+		
+		printf("%.*s\n", length, string);
 
 ///////////////////////////////////////+
-    uint8_t *temp = (uint8_t *)malloc(sizeof(uint8_t)*length);
-    
-    if(temp == NULL){
-        syslog(LOG_ERR, "malloc failed,%s L#%d\n", __func__, __LINE__);
-        lua_pushnil(L);
-        lua_pushstring(L, "malloc failed");
-    }
-    memcpy(temp,string,length);
-                    
-    esp_ble_gattc_write_char( spp_gattc_if,
-                              spp_conn_id,
-                              (db+SPP_IDX_SPP_DATA_RECV_VAL)->attribute_handle,
-                              length,
-                              temp,
-                              ESP_GATT_WRITE_TYPE_RSP,
-                              ESP_GATT_AUTH_REQ_NONE);
-    free(temp);
-///////////////////////////////////////-
-
+		uint8_t *temp = (uint8_t *)malloc(sizeof(uint8_t)*length);
+		
+		if(temp == NULL){
+		    syslog(LOG_ERR, "malloc failed,%s L#%d\n", __func__, __LINE__);
+		    lua_pushnil(L);
+		    lua_pushstring(L, "malloc failed");
+		}
+		memcpy(temp,string,length);
+		                
+		esp_ble_gattc_write_char( spp_gattc_if,
+		                          spp_conn_id,
+		                          (db+SPP_IDX_SPP_DATA_RECV_VAL)->attribute_handle,
+		                          length,
+		                          temp,
+		                          ESP_GATT_WRITE_TYPE_RSP,
+		                          ESP_GATT_AUTH_REQ_NONE);
+		free(temp);
+///////////////////////////////////////
+	}
     lua_pushboolean(L, true);
     return 1;
 }
