@@ -969,11 +969,11 @@ static int robotito_ble_send (lua_State *L) {
             if(current_num < total_num){
                 memcpy(ntf_value_p,temp + (current_num - 1)*(spp_mtu_size-3),(spp_mtu_size-3));
                 esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],(spp_mtu_size-3), ntf_value_p, false);
-                printf("|1sent:%i|",(int)(spp_mtu_size-3));
+                //printf("|1sent:%i|",(int)(spp_mtu_size-3));
             }else if(current_num == total_num){
                 memcpy(ntf_value_p,temp + (current_num - 1)*(spp_mtu_size-3),(length - (current_num - 1)*(spp_mtu_size - 3)));
                 esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL],(length - (current_num - 1)*(spp_mtu_size - 3)), ntf_value_p, false);
-                printf("|2sent:%i|",(int)(length - (current_num - 1)*(spp_mtu_size - 3)));
+                //printf("|2sent:%i|",(int)(length - (current_num - 1)*(spp_mtu_size - 3)));
             }
             vTaskDelay(20 / portTICK_PERIOD_MS);
             current_num++;
