@@ -57,7 +57,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include "driver/uart.h"
+//#include "driver/uart.h"
 
 #include "esp_bt.h"
 #include "nvs_flash.h"
@@ -70,6 +70,7 @@
 #include "esp_gatt_common_api.h"
 //#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #define GATTC_TAG                   "GATTC_SPP_DEMO"
 #define PROFILE_NUM                 1
@@ -396,7 +397,7 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
         case SPP_IDX_SPP_DATA_NTY_VAL:
             cmd = SPP_IDX_SPP_STATUS_VAL;
             if (xQueueSend(cmd_reg_queue, &cmd,10/portTICK_PERIOD_MS)) {
-            	printf('cmd_reg_queue queue full B\n');
+            	printf("cmd_reg_queue queue full B\n");
             }
             break;
         case SPP_IDX_SPP_STATUS_VAL:
@@ -466,7 +467,7 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
         }
         cmd = SPP_IDX_SPP_DATA_NTY_VAL;
         if (xQueueSend(cmd_reg_queue, &cmd, 10/portTICK_PERIOD_MS)) {
-	    	printf('cmd_reg_queue queue full A\n');
+	    	printf("cmd_reg_queue queue full A\n");
         }
         break;
     case ESP_GATTC_SRVC_CHG_EVT:
@@ -617,7 +618,7 @@ static int robotito_blecli_init (lua_State *L) {
 }
 
 static int robotito_blecli_send (lua_State *L) {
-	printf("robotito_blecli sending: ");
+	printf("robotito_blecli sending ");
 	
 	if ((is_connect == true) && 
 	((db+SPP_IDX_SPP_DATA_RECV_VAL)->properties & (ESP_GATT_CHAR_PROP_BIT_WRITE_NR | ESP_GATT_CHAR_PROP_BIT_WRITE))) {
@@ -625,6 +626,7 @@ static int robotito_blecli_send (lua_State *L) {
 		size_t length;
 		const uint8_t *string = (uint8_t *) luaL_checklstring(L, 1, &length);
 		
+		printf("(%u): ", length);
 		printf("%.*s\n", length, string);
 
 ///////////////////////////////////////+
