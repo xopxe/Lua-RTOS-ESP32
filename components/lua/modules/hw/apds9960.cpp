@@ -57,7 +57,8 @@ int delta_v = 50;
 
 int dist_threshold = 0;
 int dist_histeresis = 0;
-bool prev_state = false;
+bool state_close = false;
+bool first_dist = true;
 
 SparkFun_APDS9960 sensor;
 
@@ -321,7 +322,7 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
             return; //no changes
         }
     } else {
-printf("Error in sensor.readColor: %i", ok);
+        printf("Error in sensor.readColor: %i", ok);
 /*
         //prepare thread
         L = pvGetLuaState();
@@ -438,11 +439,21 @@ static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
 
     uint8_t d;
     bool ok = sensor.readProximity(d);
-
+    
     int status;
     if (ok) {
-        if ((prev_state && (d < dist_threshold)) || (!prev_state && (d > dist_threshold + dist_histeresis))){
-           prev_state = !prev_state;
+        if (first_dist) {
+           first_dist = false;
+           //printf("FIRST DIST %u\n", d);
+           if (d < dist_threshold + dist_histeresis) {
+               state_close = true;
+           } else {
+               state_close = false;
+           }
+        } 
+        if ((state_close && (d < dist_threshold)) || (!state_close && (d > dist_threshold + dist_histeresis))){       
+           state_close = !state_close;
+           //printf("DIST %u %s\n", d, state_close ? "true" : "false");
 
            L = pvGetLuaState();
            TL = lua_newthread(L);
@@ -450,7 +461,7 @@ static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
            lua_rawgeti(L, LUA_REGISTRYINDEX, apds9960_proximity_get_thresh_callback);
            lua_xmove(L, TL, 1);
 
-           lua_pushboolean(TL, prev_state);
+           lua_pushboolean(TL, state_close);
 
            status = lua_pcall(TL, 1, 0, 0);
            luaL_unref(TL, LUA_REGISTRYINDEX, tref);
@@ -570,10 +581,14 @@ static int apds9960_proximity_enable (lua_State *L) {
             return 2;
 	    }
 	    
+	    first_dist = true;
+	    
         //set timer for callback
-        apds9960_proximity_get_thresh_timer = xTimerCreate("apds_prox", millis / portTICK_PERIOD_MS, pdTRUE,
+        //printf("apds Setting timer...\n");
+        apds9960_proximity_get_thresh_timer = xTimerCreate("apds_prox", pdMS_TO_TICKS(millis), pdTRUE,
             (void *)apds9960_proximity_get_thresh_timer, callback_dist_get_dist_thresh);
         xTimerStart(apds9960_proximity_get_thresh_timer, 0);
+        //printf("apds Timer set.\n");
     } else {
 
 	    if (!sensor.disableProximitySensor()) {
