@@ -390,9 +390,9 @@ void spp_rcv_task(void * arg)
 	    		STREAM_BUFFER_SIZE_BYTES);
        
 		if (item_ptr != NULL) {
-    	    char *item = malloc(sizeof(char) * item_size);
-    	    memcpy(item, item_ptr, sizeof(char) * item_size);
- 	   		vRingbufferReturnItem(stream_buffer_handle, (void *)item_ptr);
+    	    //char *item = malloc(sizeof(char) * item_size);
+    	    //memcpy(item, item_ptr, sizeof(char) * item_size);
+ 	   		//vRingbufferReturnItem(stream_buffer_handle, (void *)item_ptr);
 
 
 			if (robotito_ble_rcv_callback!=LUA_REFNIL) {
@@ -404,7 +404,7 @@ void spp_rcv_task(void * arg)
 				lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_ble_rcv_callback);
 				lua_xmove(L, TL, 1);
 
-				lua_pushlstring(TL, item, item_size);
+				lua_pushlstring(TL, item_ptr, item_size);
 				int status = lua_pcall(TL, 1, 0, 0);
 				luaL_unref(TL, LUA_REGISTRYINDEX, tref);
 
@@ -438,7 +438,7 @@ void spp_rcv_task(void * arg)
 					}    
 					
 		        }
-		        memcpy(line_buff+line_buff_last, item, item_size);
+		        memcpy(line_buff+line_buff_last, item_ptr, item_size);
 		        
 		        int start_search = line_buff_last;
 		        line_buff_last += item_size;
@@ -467,8 +467,8 @@ void spp_rcv_task(void * arg)
 		            pos = memchr(line_buff, (char)10, line_buff_last);
 		        }
 		    }
-            free(item);
-            
+ 	   		vRingbufferReturnItem(stream_buffer_handle, (void *)item_ptr);
+ 	   		            
         } else {
         	//Failed to receive item
         	printf("Failed to receive item\n");
