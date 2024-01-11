@@ -88,9 +88,17 @@ TimerHandle_t motor_control_timer;
 int encoder_lua_callback = LUA_NOREF;
 int direct_kinematic_lua_callback = LUA_NOREF;
 
+bool distance_limit_set = false;
+static float distance_limit_sq = 0.0;
+bool rotation_limit_set = false;
+static float rotation_limit = 0.0;
+int limits_lua_callback = LUA_NOREF;
+bool stop_on_limit = false;
+
 static servo_t motors[NMOTORS];
 
 static odom_t odometry;
+static odom_t limit_reference;
 float tics_motores[NMOTORS];
 
 float robot_r;
@@ -199,70 +207,106 @@ static void motor_control_callback(TimerHandle_t xTimer) {
     lua_State *TL;
     lua_State *L;
     int tref;
+    
+    if ( ((direct_kinematic_lua_callback != LUA_NOREF) && (cont_c % odom_period_factor == 0))
+    || distance_limit_set || rotation_limit_set ) {
 
-    if ((direct_kinematic_lua_callback != LUA_NOREF) && (cont_c % odom_period_factor == 0)) {
-      odom_t *o = &(odometry);
-      float tics_to_rad_s = Rad_per_tick/(OMNI_CTRL_TIMER*odom_period_factor);
-      SF3dVector odom_vels = getInverseW(tics_motores[0]*tics_to_rad_s, tics_motores[1]*tics_to_rad_s, tics_motores[2]*tics_to_rad_s, o->phi);
+        //odom_t *o = &(odometry);
+        float tics_to_rad_s = Rad_per_tick/(OMNI_CTRL_TIMER*odom_period_factor);
+        SF3dVector odom_vels = getInverseW(tics_motores[0]*tics_to_rad_s, 
+        tics_motores[1]*tics_to_rad_s, tics_motores[2]*tics_to_rad_s, odometry.phi);
 
-      o->x += odom_vels.x;
-      o->y += odom_vels.y;
-      o->phi += odom_vels.z;
+        odometry.x += odom_vels.x;
+        odometry.y += odom_vels.y;
+        odometry.phi += odom_vels.z;
 
-      cont_c = 0; // reseteo el contador para respetar la cantidad de controles.
+        cont_c = 0; // reseteo el contador para respetar la cantidad de controles.
 
-      // reseteo contadores
-      tics_motores[0] = 0;
-      tics_motores[1] = 0;
-      tics_motores[2] = 0;
+        // reseteo contadores
+        tics_motores[0] = 0;
+        tics_motores[1] = 0;
+        tics_motores[2] = 0;
 
-      //Devuelvo la odometria
-      L = pvGetLuaState();
-      TL = lua_newthread(L);
+        bool trigger_distance = false;
+        if (distance_limit_set) {
+            float dx = odometry.x - limit_reference.x;
+            float dy = odometry.y - limit_reference.y;
+            float distance_sq = dx*dx + dy*dy;
+            if (distance_sq>=distance_limit_sq) {
+                trigger_distance = true;
+            }
+        }
+        if (rotation_limit_set) {
+        float angle = fabs(odometry.phi - limit_reference.phi);
+            if ( angle >= rotation_limit) {
+                trigger_distance = true;
+            }
+        }        
+        if ( trigger_distance ) {
+            if ( stop_on_limit ) {
+                motors[0].target_v = 0;
+                motors[1].target_v = 0;
+                motors[2].target_v = 0;
 
-      tref = luaL_ref(L, LUA_REGISTRYINDEX);
+                motors[0].accum_error = 0;
+                motors[1].accum_error = 0;
+                motors[2].accum_error = 0;
+            }
+              
+            limit_reference = odometry;
+            
+            if ( limits_lua_callback != LUA_NOREF ) { 
 
-      lua_rawgeti(L, LUA_REGISTRYINDEX, direct_kinematic_lua_callback);
-      lua_xmove(L, TL, 1);
-      lua_pushnumber(TL, o->x);
-      lua_pushnumber(TL, o->y);
-      lua_pushnumber(TL, o->phi);   //*Rad_per_tick
-      lua_pushnumber(TL, odom_vels.x);
-      lua_pushnumber(TL, odom_vels.y);
-      lua_pushnumber(TL, odom_vels.z);
-      int status = lua_pcall(TL, 6, 0, 0);
-      luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+                L = pvGetLuaState();
+                TL = lua_newthread(L);
 
-      if (status != LUA_OK) {
-        const char *msg = lua_tostring(TL, -1);
-          //luaL_error(TL, msg);
-        lua_writestringerror("error in odometry callback %s\n", msg);
-        lua_pop(TL, 1);
-      }
+                tref = luaL_ref(L, LUA_REGISTRYINDEX);
 
+                lua_rawgeti(L, LUA_REGISTRYINDEX, limits_lua_callback);
+                lua_xmove(L, TL, 1);
+
+                lua_pushnumber(TL, odometry.x);
+                lua_pushnumber(TL, odometry.y);
+                lua_pushnumber(TL, odometry.phi);   //*Rad_per_tick
+                int status = lua_pcall(TL, 3, 0, 0);
+                luaL_unref(TL, LUA_REGISTRYINDEX, tref);   
+                if (status != LUA_OK) {
+                    const char *msg = lua_tostring(TL, -1);
+                    lua_writestringerror("error in limits callback %s\n", msg);
+                    lua_pop(TL, 1);
+                }
+            }
+        }
+
+        if ((direct_kinematic_lua_callback != LUA_NOREF) && (cont_c % odom_period_factor == 0)) {
+
+          //Devuelvo la odometria
+          L = pvGetLuaState();
+          TL = lua_newthread(L);
+
+          tref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+          lua_rawgeti(L, LUA_REGISTRYINDEX, direct_kinematic_lua_callback);
+          lua_xmove(L, TL, 1);
+          lua_pushnumber(TL, odometry.x);
+          lua_pushnumber(TL, odometry.y);
+          lua_pushnumber(TL, odometry.phi);   //*Rad_per_tick
+          lua_pushnumber(TL, odom_vels.x);
+          lua_pushnumber(TL, odom_vels.y);
+          lua_pushnumber(TL, odom_vels.z);
+          int status = lua_pcall(TL, 6, 0, 0);
+          luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
+          if (status != LUA_OK) {
+            const char *msg = lua_tostring(TL, -1);
+              //luaL_error(TL, msg);
+            lua_writestringerror("error in odometry callback %s\n", msg);
+            lua_pop(TL, 1);
+          }
+
+        }
     }
 
-
-/*
-    for (int i=0; i<NMOTORS; i++) {
-        bool dirty = false;
-        if (motors[i].current_v < motors[i].target_v) {
-            dirty=true;
-            motors[i].current_v+=10;
-            if (motors[i].current_v > motors[i].target_v)
-                motors[i].current_v = motors[i].target_v;
-        }
-        if (motors[i].current_v > motors[i].target_v) {
-            dirty=true;
-            motors[i].current_v-=10;
-            if (motors[i].current_v < motors[i].target_v)
-                motors[i].current_v = motors[i].target_v;
-        }
-        if (dirty) {
-            motors[i].driver->setMotorSpeed(motors[i].current_v);
-        }
-    }
-*/
 }
 
 static void callback_enc_func(int i_encoder, int8_t dir, uint32_t counter, uint8_t button) {
@@ -470,10 +514,10 @@ static int omni_set_encoder_callback( lua_State* L ) {
 static int omni_set_odometry_callback( lua_State* L ) {
 	if (lua_isfunction(L, 1)) {
 		luaL_checktype(L, 1, LUA_TFUNCTION);
-    odom_period_factor = luaL_optnumber(L, 2, 10); // Number of periods to publish odom.
-    odometry.x = luaL_optnumber(L, 3, 0.0);
-    odometry.y = luaL_optnumber(L, 4, 0.0);
-    odometry.phi = luaL_optnumber(L, 5, 0.0);
+        odom_period_factor = luaL_optnumber(L, 2, 10); // Number of periods to publish odom.
+        odometry.x = luaL_optnumber(L, 3, 0.0);
+        odometry.y = luaL_optnumber(L, 4, 0.0);
+        odometry.phi = luaL_optnumber(L, 5, 0.0);
 		lua_pushvalue(L, 1);
 		direct_kinematic_lua_callback = luaL_ref(L, LUA_REGISTRYINDEX);
 	} else {
@@ -483,6 +527,32 @@ static int omni_set_odometry_callback( lua_State* L ) {
     return 1;
 }
 
+static int omni_set_limits( lua_State* L ) {
+    if (lua_isnumber(L,1))  {
+        distance_limit_sq = lua_tonumber( L, 1 );
+        distance_limit_sq *= distance_limit_sq;
+        limit_reference = odometry;  
+        distance_limit_set = true;
+    } else {
+        distance_limit_set = false;
+    }
+    if (lua_isnumber(L,2))  {
+        rotation_limit = lua_tonumber( L, 2 );
+        limit_reference = odometry;
+        rotation_limit_set = true;
+    } else {
+        rotation_limit_set = false;
+    }
+    stop_on_limit = lua_toboolean(L,3);
+    if (lua_isfunction(L, 4)) {
+        lua_pushvalue(L, 4);
+        limits_lua_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+    } else {
+	    limits_lua_callback = LUA_NOREF;
+    }
+    lua_pushboolean(L, true);
+    return 1;
+}
 
 static const luaL_Reg omni_hbridge[] = {
 //	{"attach", lvl53l0x_attach},
@@ -493,13 +563,14 @@ static const luaL_Reg omni_hbridge[] = {
 	{"set_enable", omni_set_enable},
 	{"set_raw", omni_set_raw},
 	{"set_pid", omni_set_pid},
-  {"set_max_output", omni_set_max_output},
-  {"set_set_rad_per_tick", omni_set_rad_per_tick},
-  {"set_set_wheel_diameter", omni_set_wheel_diameter},
-  {"set_encoder_callback", omni_set_encoder_callback},
-  {"set_odometry_callback",omni_set_odometry_callback},
+    {"set_max_output", omni_set_max_output},
+    {"set_set_rad_per_tick", omni_set_rad_per_tick},
+    {"set_set_wheel_diameter", omni_set_wheel_diameter},
+    {"set_encoder_callback", omni_set_encoder_callback},
+    {"set_odometry_callback",omni_set_odometry_callback},
+    {"set_limits", omni_set_limits},
 
-  {NULL, NULL}
+    {NULL, NULL}
 };
 
 LUALIB_API int luaopen_omni_hbridge( lua_State *L ) {
