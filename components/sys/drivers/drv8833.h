@@ -13,8 +13,10 @@ Notes:				None
 //#include <Arduino.h>
 //#include <WProgram.h>
 
-class Drv8833 {
-	private:
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef struct sDrv8833 {
 	int intSpeed;
 	int pin1;
 	int pin2;
@@ -24,14 +26,14 @@ class Drv8833 {
 
     int8_t pwm_channel1;
     int8_t pwm_channel2;
+} sDrv8833;
 
-	public:
-	Drv8833();
-	Drv8833(int intIn1, int intIn2, bool braked);
-	void setMotorSpeed(int intIn);
-	int getMotorSpeed();
-	bool isMotorRunning();
-	void stopMotor();
-	void startMotor();
-};
+sDrv8833 *Drv8833init_default();
+sDrv8833 *Drv8833init(int intIn1, int intIn2, bool braked);
+void Drv8833setMotorSpeed(sDrv8833 *drv, int intIn);
+int  Drv8833getMotorSpeed(sDrv8833 *drv);
+bool Drv8833isMotorRunning(sDrv8833 *drv);
+void Drv8833stopMotor(sDrv8833 *drv);
+void Drv8833startMotor(sDrv8833 *drv);
+
 #endif

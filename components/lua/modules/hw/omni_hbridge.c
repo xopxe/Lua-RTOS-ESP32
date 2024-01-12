@@ -21,10 +21,6 @@
 #define SERVO_CCW_DTY_MAX 2500
 */
 
-#ifdef __cplusplus
-extern "C"{
-#endif
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/adds.h"
 
@@ -49,7 +45,7 @@ extern "C"{
 #include <drivers/encoder.h>
 
 typedef struct {
-	Drv8833 *driver;
+	sDrv8833 *driver;
 
     encoder_h_t *encoder;
     int32_t counter;
@@ -103,34 +99,34 @@ float tics_motores[NMOTORS];
 
 float robot_r;
 
-SF3dVector static getW(float x_dot, float y_dot, float w_dot, float phi_r){
-	SF3dVector v(x_dot, y_dot, w_dot);
-  float pi_3 = PI/3;
-	SF3dMatrix M(
+vec3_t static getW(float x_dot, float y_dot, float w_dot, float phi_r){
+	vec3_t v = vec3(x_dot, y_dot, w_dot);
+
+	mat3_t M = mat3(
 		-sin(phi_r),         cos(phi_r),        robot_r,
-		-sin(pi_3 - phi_r), -cos(pi_3 - phi_r), robot_r,
-		 sin(pi_3 + phi_r), -cos(pi_3 + phi_r), robot_r
+		-sin(M_PI/3 - phi_r), -cos(M_PI/3 - phi_r), robot_r,
+		 sin(M_PI/3 + phi_r), -cos(M_PI/3 + phi_r), robot_r
 	);
 
-	SF3dVector w = M*v;
+	vec3_t w = mat3_mul_vec3(M,v);
 	return w;
 }
 
-SF3dVector static getInverseW(float w_1, float w_2, float w_3, float phi){
+vec3_t static getInverseW(float w_1, float w_2, float w_3, float phi){
 
-	SF3dVector x(w_1 *Wheel_radius, w_2 *Wheel_radius, w_3 *Wheel_radius);
+	vec3_t x = vec3(w_1 *Wheel_radius, w_2 *Wheel_radius, w_3 *Wheel_radius);
 
-  float pi_6 = PI/6;
-  float dostercios = 2.0/3;
-  float robot_r_3 = 1.0/(robot_r*3);
+    float pi_6 = M_PI/6;
+    float dostercios = 2.0/3;
+    float robot_r_3 = 1.0/(robot_r*3);
 
-	SF3dMatrix A(
+	mat3_t A = mat3(
     -sin(phi)*dostercios , -cos(pi_6 + phi)*dostercios, cos(phi - pi_6)*dostercios,
 		cos(phi)*dostercios  , -sin(pi_6 + phi)*dostercios, sin(phi - pi_6)*dostercios,
 		robot_r_3            , robot_r_3                  , robot_r_3
 	);
 
-	SF3dVector u = A*x;
+	vec3_t u = mat3_mul_vec3(A,x);
 	return u;
 }
 
@@ -199,7 +195,7 @@ static void motor_control_callback(TimerHandle_t xTimer) {
     }
 
     for (int i=0; i<NMOTORS; i++) {
-        motors[i].driver->setMotorSpeed(motors[i].output);
+        Drv8833setMotorSpeed(motors[i].driver, motors[i].output);
     }
 
     cont_c++;
@@ -213,7 +209,7 @@ static void motor_control_callback(TimerHandle_t xTimer) {
 
         //odom_t *o = &(odometry);
         float tics_to_rad_s = Rad_per_tick/(OMNI_CTRL_TIMER*odom_period_factor);
-        SF3dVector odom_vels = getInverseW(tics_motores[0]*tics_to_rad_s, 
+        vec3_t odom_vels = getInverseW(tics_motores[0]*tics_to_rad_s, 
         tics_motores[1]*tics_to_rad_s, tics_motores[2]*tics_to_rad_s, odometry.phi);
 
         odometry.x += odom_vels.x;
@@ -360,7 +356,7 @@ static int omni_init (lua_State *L) {
         printf("omni Setting motor %d pins:%d,%d enc:%d,%d", i, pin1, pin2, encA, encB);
 
         //driver
-        motors[i].driver=new Drv8833(pin1, pin2, MOTORS_BRAKED);
+        motors[i].driver = Drv8833init(pin1, pin2, MOTORS_BRAKED);
 
         //encoder
         encoder_h_t *encoder;
@@ -400,7 +396,7 @@ static int omni_set_enable (lua_State *L) {
             return luaL_driver_error(L, error);
         }
         for (int i=0; i<NMOTORS; i++) {
-            motors[i].driver->startMotor();
+            Drv8833startMotor(motors[i].driver);
             motors[i].counter = 0;
         }
     } else {
@@ -409,7 +405,7 @@ static int omni_set_enable (lua_State *L) {
             return luaL_driver_error(L, error);
         }
         for (int i=0; i<NMOTORS; i++) {
-            motors[i].driver->stopMotor();
+            Drv8833stopMotor(motors[i].driver);
         }
     }
 
@@ -424,11 +420,11 @@ static int omni_set_raw (lua_State *L) {
     if (enable) {
         xTimerStop(motor_control_timer, 0);
         for (int i=0; i<NMOTORS; i++) {
-            motors[i].driver->startMotor();
+            Drv8833startMotor(motors[i].driver);
         }
     } else {
         for (int i=0; i<NMOTORS; i++) {
-            motors[i].driver->stopMotor();
+            Drv8833stopMotor(motors[i].driver);
         }
     }
 
@@ -441,7 +437,7 @@ static int omni_set_raw (lua_State *L) {
 static int omni_raw_write (lua_State *L) {
     for (int i=0; i<NMOTORS; i++) {
         double value = luaL_optnumber( L, i+1, 0 );
-        motors[i].driver->setMotorSpeed(value);
+        Drv8833setMotorSpeed(motors[i].driver,value);
     }
 
     lua_pushboolean(L, true);
@@ -484,7 +480,7 @@ static int omni_drive (lua_State *L) {
     float w_dot = luaL_checknumber( L, 3 );
     float phi = luaL_optnumber( L, 4, 0.0 );
 
-    SF3dVector w = getW(x_dot, y_dot, w_dot, phi);
+    vec3_t w = getW(x_dot, y_dot, w_dot, phi);
     //printf("omni computed vel 1 %f %f \r\n", w.x, w.x * m_per_sec_to_tics_per_sec);
 
     motors[0].target_v = w.x * m_per_sec_to_tics_per_sec;
@@ -554,32 +550,29 @@ static int omni_set_limits( lua_State* L ) {
     return 1;
 }
 
-static const luaL_Reg omni_hbridge[] = {
-//	{"attach", lvl53l0x_attach},
-//	{"detach", lvl53l0x_detach},
-	{"init", omni_init},
-	{"raw_write", omni_raw_write},
-	{"drive", omni_drive},
-	{"set_enable", omni_set_enable},
-	{"set_raw", omni_set_raw},
-	{"set_pid", omni_set_pid},
-    {"set_max_output", omni_set_max_output},
-    {"set_set_rad_per_tick", omni_set_rad_per_tick},
-    {"set_set_wheel_diameter", omni_set_wheel_diameter},
-    {"set_encoder_callback", omni_set_encoder_callback},
-    {"set_odometry_callback",omni_set_odometry_callback},
-    {"set_limits", omni_set_limits},
+static const LUA_REG_TYPE omni_hbridge_map[] = {
+	{LSTRKEY("init"), LFUNCVAL(omni_init)},
+	{LSTRKEY("raw_write"), LFUNCVAL(omni_raw_write)},
+	{LSTRKEY("drive"), LFUNCVAL(omni_drive)},
+	{LSTRKEY("set_enable"), LFUNCVAL(omni_set_enable)},
+	{LSTRKEY("set_raw"), LFUNCVAL(omni_set_raw)},
+	{LSTRKEY("set_pid"), LFUNCVAL(omni_set_pid)},
+    {LSTRKEY("set_max_output"), LFUNCVAL(omni_set_max_output)},
+    {LSTRKEY("set_set_rad_per_tick"), LFUNCVAL(omni_set_rad_per_tick)},
+    {LSTRKEY("set_set_wheel_diameter"), LFUNCVAL(omni_set_wheel_diameter)},
+    {LSTRKEY("set_encoder_callback"), LFUNCVAL(omni_set_encoder_callback)},
+    {LSTRKEY("set_odometry_callback"),LFUNCVAL(omni_set_odometry_callback)},
+    {LSTRKEY("set_limits"), LFUNCVAL(omni_set_limits)},
 
-    {NULL, NULL}
+    { LNILKEY, LNILVAL }
 };
 
 LUALIB_API int luaopen_omni_hbridge( lua_State *L ) {
     //luaL_register(L,"vl53l0x", vl53l0x_map);
-    luaL_newlib(L, omni_hbridge);
-	return 1;
+	LNEWLIB(L, omni_hbridge_map);   
 }
 
-MODULE_REGISTER_RAM(OMNIHBRIDGE, omni_hbridge, luaopen_omni_hbridge, 1);
+MODULE_REGISTER_ROM(OMNIHBRIDGE, omni_hbridge, omni_hbridge_map, luaopen_omni_hbridge, 1);
 
 
 /*
@@ -604,9 +597,5 @@ LUALIB_API int luaopen_vl53l0x( lua_State *L ) {
 
 MODULE_REGISTER_ROM(VL53L0X, vl53l0x, vl53l0x_map, luaopen_vl53l0x, 1);
 */
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif
