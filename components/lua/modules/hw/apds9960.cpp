@@ -37,7 +37,7 @@ TimerHandle_t apds9960_color_get_color_timer;
 int apds9960_color_get_rgb_callback = LUA_REFNIL;
 int apds9960_color_get_change_callback = LUA_REFNIL;
 
-TimerHandle_t apds9960_proximity_get_thresh_timer;
+TimerHandle_t apds9960_proximity_get_thresh_timer = NULL;
 int apds9960_proximity_get_thresh_callback = LUA_REFNIL;
 
 int current_color_i = -1;
@@ -54,11 +54,9 @@ int delta_h = 10;
 int delta_s = 50;
 int delta_v = 50;
 
-
-int dist_threshold = 0;
-int dist_histeresis = 0;
-bool state_close = false;
-bool first_dist = true;
+int prox_threshold = 0;
+int prox_histeresis = 0;
+static signed char prox_state = -1; // -1=not initialized, 0=far, 1=close
 
 SparkFun_APDS9960 sensor;
 
@@ -322,7 +320,7 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
             return; //no changes
         }
     } else {
-        printf("Error in sensor.readColor: %i", ok);
+	//printf("Error in sensor.readColor: %i", ok);
 /*
         //prepare thread
         L = pvGetLuaState();
@@ -417,7 +415,7 @@ static int apds9960_set_LED_drive (lua_State *L) {
 }
 
 
-static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
+static void callback_prox_get_thresh(TimerHandle_t xTimer) {
 	lua_State *TL;
 	lua_State *L;
 	int tref;
@@ -437,23 +435,17 @@ static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
     }
 
 
-    uint8_t d;
-    bool ok = sensor.readProximity(d);
-    
+    uint8_t prox_reading;
+    bool ok = sensor.readProximity(prox_reading);
+
     int status;
     if (ok) {
-        if (first_dist) {
-           first_dist = false;
-           //printf("FIRST DIST %u\n", d);
-           if (d < dist_threshold + dist_histeresis) {
-               state_close = true;
-           } else {
-               state_close = false;
-           }
-        } 
-        if ((state_close && (d < dist_threshold)) || (!state_close && (d > dist_threshold + dist_histeresis))){       
-           state_close = !state_close;
-           //printf("DIST %u %s\n", d, state_close ? "true" : "false");
+        if ( (prox_state==-1) 
+        || (prox_state==1 && (prox_reading < prox_threshold-prox_histeresis)) 
+        || (prox_state==0 && (prox_reading > prox_threshold)) )
+        {
+           //prev_state = !prev_state;
+           prox_state = (prox_reading < prox_threshold) ? 0 : 1;
 
            L = pvGetLuaState();
            TL = lua_newthread(L);
@@ -461,7 +453,7 @@ static void callback_dist_get_dist_thresh(TimerHandle_t xTimer) {
            lua_rawgeti(L, LUA_REGISTRYINDEX, apds9960_proximity_get_thresh_callback);
            lua_xmove(L, TL, 1);
 
-           lua_pushboolean(TL, state_close);
+           lua_pushboolean(TL, prox_state);
 
            status = lua_pcall(TL, 1, 0, 0);
            luaL_unref(TL, LUA_REGISTRYINDEX, tref);
@@ -554,22 +546,27 @@ static int apds9960_proximity_get_thresh (lua_State *L) {
 static int apds9960_proximity_enable (lua_State *L) {
     bool enable = lua_toboolean(L, 1);
     if (enable) {
-        uint32_t millis = luaL_checkinteger( L, 1 );
+        if (apds9960_proximity_get_thresh_timer!=NULL) {
+            xTimerStop(apds9960_proximity_get_thresh_timer, portMAX_DELAY);
+	        xTimerDelete(apds9960_proximity_get_thresh_timer, portMAX_DELAY);
+        }
+
+        uint32_t millis = luaL_optinteger( L, 1, 1000 );
 	    if (millis < 1) {
             lua_pushnil(L);
             lua_pushstring(L, "invalid period");
             return 2;
 	    }
 	    
-        dist_threshold = luaL_checkinteger( L, 2 );
-        if (dist_threshold < 0) {
+        prox_threshold = luaL_optinteger( L, 2, 250 );
+        if (prox_threshold < 0) {
             lua_pushnil(L);
             lua_pushstring(L, "invalid thresh");
             return 2;
         }
 
-        dist_histeresis = luaL_checkinteger( L, 3 );
-        if (dist_histeresis < 0) {
+        prox_histeresis = luaL_optinteger( L, 3, 0 );
+        if (prox_histeresis < 0) {
             lua_pushnil(L);
             lua_pushstring(L, "invalid histeresis");
             return 2;
@@ -581,14 +578,12 @@ static int apds9960_proximity_enable (lua_State *L) {
             return 2;
 	    }
 	    
-	    first_dist = true;
-	    
-        //set timer for callback
-        //printf("apds Setting timer...\n");
-        apds9960_proximity_get_thresh_timer = xTimerCreate("apds_prox", pdMS_TO_TICKS(millis), pdTRUE,
-            (void *)apds9960_proximity_get_thresh_timer, callback_dist_get_dist_thresh);
+	    prox_state = -1; // force first callback 
+	       
+        //set timer for callback        
+        apds9960_proximity_get_thresh_timer = xTimerCreate("apds_prox", millis / portTICK_PERIOD_MS, pdTRUE,
+            (void *)apds9960_proximity_get_thresh_timer, callback_prox_get_thresh);
         xTimerStart(apds9960_proximity_get_thresh_timer, 0);
-        //printf("apds Timer set.\n");
     } else {
 
 	    if (!sensor.disableProximitySensor()) {
@@ -598,9 +593,12 @@ static int apds9960_proximity_enable (lua_State *L) {
 	    }
 
         //delete timer
-        xTimerStop(apds9960_proximity_get_thresh_timer, portMAX_DELAY);
-	      xTimerDelete(apds9960_proximity_get_thresh_timer, portMAX_DELAY);
-        apds9960_proximity_get_thresh_callback = LUA_REFNIL;
+        if (apds9960_proximity_get_thresh_timer!=NULL) {
+            xTimerStop(apds9960_proximity_get_thresh_timer, portMAX_DELAY);
+	        xTimerDelete(apds9960_proximity_get_thresh_timer, portMAX_DELAY);
+	        apds9960_proximity_get_thresh_timer = NULL;
+	    }
+        prox_state = -1;
     }
 
     lua_pushboolean(L, true);
