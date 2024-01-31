@@ -10,6 +10,11 @@
 #define OMNI_NRO_TIMER CPU_TIMER0
 #define OMNI_CTRL_TIMER 0.05 // s
 
+
+#define M_PI_6 M_PI/6.0
+#define M_PI_3 M_PI/3.0
+#define M_2_3 2.0/3.0
+
 /*
 #define SERVO_CW_VEL_MIN 1
 #define SERVO_CW_DTY_MIN 1400
@@ -72,12 +77,12 @@ float KF = 1.0;
 float Rad_per_tick = 0.0;
 float Wheel_diameter = 0.0;
 float Wheel_radius = 0.0;
-float m_per_sec_to_tics_per_sec = 1.0;
-int cont_c = 1;
+float m_per_sec_to_tics_per_sec = 0.0;
+unsigned int cont_c = 1;
 
 float Max_output = 100.0;
 
-int odom_period_factor = 1.0;
+int odom_period_factor = 5;
 
 TimerHandle_t motor_control_timer;
 
@@ -98,14 +103,15 @@ static odom_t limit_reference;
 float tics_motores[NMOTORS];
 
 float robot_r;
+float robot_r_3;
 
 vec3_t static getW(float x_dot, float y_dot, float w_dot, float phi_r){
 	vec3_t v = vec3(x_dot, y_dot, w_dot);
 
 	mat3_t M = mat3(
 		-sin(phi_r),         cos(phi_r),        robot_r,
-		-sin(M_PI/3 - phi_r), -cos(M_PI/3 - phi_r), robot_r,
-		 sin(M_PI/3 + phi_r), -cos(M_PI/3 + phi_r), robot_r
+		-sin(M_PI_3 - phi_r), -cos(M_PI_3 - phi_r), robot_r,
+		 sin(M_PI_3 + phi_r), -cos(M_PI_3 + phi_r), robot_r
 	);
 
 	vec3_t w = mat3_mul_vec3(M,v);
@@ -113,17 +119,13 @@ vec3_t static getW(float x_dot, float y_dot, float w_dot, float phi_r){
 }
 
 vec3_t static getInverseW(float w_1, float w_2, float w_3, float phi){
-
 	vec3_t x = vec3(w_1 *Wheel_radius, w_2 *Wheel_radius, w_3 *Wheel_radius);
 
-    float pi_6 = M_PI/6;
-    float dostercios = 2.0/3;
-    float robot_r_3 = 1.0/(robot_r*3);
 
 	mat3_t A = mat3(
-    -sin(phi)*dostercios , -cos(pi_6 + phi)*dostercios, cos(phi - pi_6)*dostercios,
-		cos(phi)*dostercios  , -sin(pi_6 + phi)*dostercios, sin(phi - pi_6)*dostercios,
-		robot_r_3            , robot_r_3                  , robot_r_3
+        -sin(phi)*M_2_3 , -cos(M_PI_6 + phi)*M_2_3, cos(phi - M_PI_6)*M_2_3,
+		cos(phi)*M_2_3  , -sin(M_PI_6 + phi)*M_2_3, sin(phi - M_PI_6)*M_2_3,
+        robot_r_3       , robot_r_3               , robot_r_3
 	);
 
 	vec3_t u = mat3_mul_vec3(A,x);
@@ -199,30 +201,36 @@ static void motor_control_callback(TimerHandle_t xTimer) {
     }
 
     cont_c++;
+  
+  
+    //printf ("[%d %d]",cont_c, odom_period_factor);
+    if ( (cont_c % odom_period_factor == 0) &&
+         ((direct_kinematic_lua_callback != LUA_NOREF) || distance_limit_set || rotation_limit_set) ) {
 
-    lua_State *TL;
-    lua_State *L;
-    int tref;
-    
-    if ( ((direct_kinematic_lua_callback != LUA_NOREF) && (cont_c % odom_period_factor == 0))
-    || distance_limit_set || rotation_limit_set ) {
-
-        //odom_t *o = &(odometry);
-        float tics_to_rad_s = odom_period_factor*Rad_per_tick/OMNI_CTRL_TIMER;
-        vec3_t odom_vels = getInverseW(tics_motores[0]*tics_to_rad_s, 
-        tics_motores[1]*tics_to_rad_s, tics_motores[2]*tics_to_rad_s, odometry.phi);
-
-        odometry.x += odom_vels.x;
-        odometry.y += odom_vels.y;
-        odometry.phi += odom_vels.z;
+        lua_State *TL;
+        lua_State *L;
+        int tref;
 
         cont_c = 0; // reseteo el contador para respetar la cantidad de controles.
+        float dt = OMNI_CTRL_TIMER*odom_period_factor;
+         
+        float tics_to_rad_s = Rad_per_tick/dt;
+        vec3_t odom_vels = getInverseW(
+            tics_motores[0]*tics_to_rad_s, 
+            tics_motores[1]*tics_to_rad_s, 
+            tics_motores[2]*tics_to_rad_s, 
+            odometry.phi
+        );
+
+        odometry.x += (odom_vels.x * dt);
+        odometry.y += (odom_vels.y * dt);
+        odometry.phi += (odom_vels.z * dt);
 
         // reseteo contadores
         tics_motores[0] = 0;
         tics_motores[1] = 0;
         tics_motores[2] = 0;
-
+        
         bool trigger_distance = false;
         if (distance_limit_set) {
             float dx = odometry.x - limit_reference.x;
@@ -244,6 +252,7 @@ static void motor_control_callback(TimerHandle_t xTimer) {
                 motors[1].target_v = 0;
                 motors[2].target_v = 0;
 
+                //FIXME neccesary?
                 motors[0].accum_error = 0;
                 motors[1].accum_error = 0;
                 motors[2].accum_error = 0;
@@ -274,32 +283,31 @@ static void motor_control_callback(TimerHandle_t xTimer) {
             }
         }
 
-        if ((direct_kinematic_lua_callback != LUA_NOREF) && (cont_c % odom_period_factor == 0)) {
+        if ( direct_kinematic_lua_callback != LUA_NOREF ) {
 
-          //Devuelvo la odometria
-          L = pvGetLuaState();
-          TL = lua_newthread(L);
+            //Devuelvo la odometria
+            L = pvGetLuaState();
+            TL = lua_newthread(L);
 
-          tref = luaL_ref(L, LUA_REGISTRYINDEX);
+            tref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-          lua_rawgeti(L, LUA_REGISTRYINDEX, direct_kinematic_lua_callback);
-          lua_xmove(L, TL, 1);
-          lua_pushnumber(TL, odometry.x);
-          lua_pushnumber(TL, odometry.y);
-          lua_pushnumber(TL, odometry.phi);   //*Rad_per_tick
-          lua_pushnumber(TL, odom_vels.x);
-          lua_pushnumber(TL, odom_vels.y);
-          lua_pushnumber(TL, odom_vels.z);
-          int status = lua_pcall(TL, 6, 0, 0);
-          luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+            lua_rawgeti(L, LUA_REGISTRYINDEX, direct_kinematic_lua_callback);
+            lua_xmove(L, TL, 1);
+            lua_pushnumber(TL, odometry.x);
+            lua_pushnumber(TL, odometry.y);
+            lua_pushnumber(TL, odometry.phi);   //*Rad_per_tick
+            lua_pushnumber(TL, odom_vels.x);
+            lua_pushnumber(TL, odom_vels.y);
+            lua_pushnumber(TL, odom_vels.z);
+            int status = lua_pcall(TL, 6, 0, 0);
+            luaL_unref(TL, LUA_REGISTRYINDEX, tref);
 
-          if (status != LUA_OK) {
-            const char *msg = lua_tostring(TL, -1);
-              //luaL_error(TL, msg);
-            lua_writestringerror("error in odometry callback %s\n", msg);
-            lua_pop(TL, 1);
-          }
-
+            if (status != LUA_OK) {
+                const char *msg = lua_tostring(TL, -1);
+                //luaL_error(TL, msg);
+                lua_writestringerror("error in odometry callback %s\n", msg);
+                lua_pop(TL, 1);
+            }
         }
     }
 
@@ -346,6 +354,7 @@ static int omni_init (lua_State *L) {
     int8_t default_enc[] = MOTOR_ENC;
 
     robot_r = luaL_checknumber(L, 1);
+    robot_r_3 = 1.0/(robot_r*3.0);
 
     for (int i=0; i<NMOTORS; i++) {
         int8_t pin1 = luaL_optinteger( L, (4*i)+2, default_pins[2*i] );
@@ -454,15 +463,15 @@ static int omni_set_pid (lua_State *L) {
 }
 
 static int omni_set_rad_per_tick (lua_State *L) {
-    Rad_per_tick = luaL_optnumber( L, 1, 1.0 );
-    m_per_sec_to_tics_per_sec = 1/(Rad_per_tick * Wheel_radius);
+    Rad_per_tick = luaL_checknumber( L, 1 );
+    //m_per_sec_to_tics_per_sec = 1/(Rad_per_tick * Wheel_radius);
     lua_pushboolean(L, true);
 	return 1;
 }
 
 static int omni_set_wheel_diameter (lua_State *L) {
-    Wheel_diameter = luaL_optnumber( L, 2, 0.038);
-    Wheel_radius = Wheel_diameter /2;
+    Wheel_diameter = luaL_checknumber(L, 1); //luaL_optnumber( L, 1, 0.038);
+    Wheel_radius = Wheel_diameter/2.0;
     m_per_sec_to_tics_per_sec = 1/(Rad_per_tick * Wheel_radius);
     lua_pushboolean(L, true);
 	return 1;
@@ -510,7 +519,7 @@ static int omni_set_encoder_callback( lua_State* L ) {
 static int omni_set_odometry_callback( lua_State* L ) {
 	if (lua_isfunction(L, 1)) {
 		luaL_checktype(L, 1, LUA_TFUNCTION);
-        odom_period_factor = luaL_optnumber(L, 2, 10); // Number of periods to publish odom.
+        odom_period_factor = luaL_optnumber(L, 2, 5); // Number of periods to publish odom.
         odometry.x = luaL_optnumber(L, 3, 0.0);
         odometry.y = luaL_optnumber(L, 4, 0.0);
         odometry.phi = luaL_optnumber(L, 5, 0.0);
