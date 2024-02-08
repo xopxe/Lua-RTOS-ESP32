@@ -384,23 +384,27 @@ void spp_rcv_task(void * arg)
         vTaskDelay(50 / portTICK_PERIOD_MS);
         
 		size_t item_size;
-	    char *item = (char *)xRingbufferReceiveUpTo(stream_buffer_handle, 
+	    char *item_ptr = (char *)xRingbufferReceiveUpTo(stream_buffer_handle, 
 	    		&item_size, 
 	    		portMAX_DELAY, 
 	    		STREAM_BUFFER_SIZE_BYTES);
        
-		if (item != NULL) {
-			if (robotito_ble_rcv_callback!=LUA_REFNIL) {	
+		if (item_ptr != NULL) {
+    	    //char *item = malloc(sizeof(char) * item_size);
+    	    //memcpy(item, item_ptr, sizeof(char) * item_size);
+ 	   		//vRingbufferReturnItem(stream_buffer_handle, (void *)item_ptr);
+
+
+			if (robotito_ble_rcv_callback!=LUA_REFNIL) {
 				//prepare thread
+				
 				lua_State *L = pvGetLuaState();
 				lua_State *TL = lua_newthread(L);
 				int tref = luaL_ref(L, LUA_REGISTRYINDEX);
 				lua_rawgeti(L, LUA_REGISTRYINDEX, robotito_ble_rcv_callback);
 				lua_xmove(L, TL, 1);
 
-				lua_pushlstring(TL, item, item_size);
-			    vRingbufferReturnItem(stream_buffer_handle, (void *)item);
-
+				lua_pushlstring(TL, item_ptr, item_size);
 				int status = lua_pcall(TL, 1, 0, 0);
 				luaL_unref(TL, LUA_REGISTRYINDEX, tref);
 
@@ -414,6 +418,7 @@ void spp_rcv_task(void * arg)
 		        if (line_buff_last+item_size>CONFIG_ROBOTITO_BLE_LINEBUFFER) {
 		            // if buffer overflow, send current buffer in error output
 		            //prepare thread
+
 					lua_State *L = pvGetLuaState();
 					lua_State *TL = lua_newthread(L);
 					int tref = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -433,13 +438,14 @@ void spp_rcv_task(void * arg)
 					}    
 					
 		        }
-		        memcpy(line_buff+line_buff_last, item, item_size);
+		        memcpy(line_buff+line_buff_last, item_ptr, item_size);
+		        
 		        int start_search = line_buff_last;
 		        line_buff_last += item_size;
 		        char *pos = memchr(line_buff+start_search, (char)10, line_buff_last-start_search);
 		        while ( pos ) {
-		            
 		            //prepare thread
+
 					lua_State *L = pvGetLuaState();
 					lua_State *TL = lua_newthread(L);
 					int tref = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -461,7 +467,8 @@ void spp_rcv_task(void * arg)
 		            pos = memchr(line_buff, (char)10, line_buff_last);
 		        }
 		    }
-
+ 	   		vRingbufferReturnItem(stream_buffer_handle, (void *)item_ptr);
+ 	   		            
         } else {
         	//Failed to receive item
         	printf("Failed to receive item\n");
@@ -810,10 +817,8 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 
 static int robotito_ble_init (lua_State *L) {
 	if (robotito_ble_initialized) {
-	    syslog(LOG_WARNING, "already initialized\n");
-        lua_pushnil(L);
-        lua_pushstring(L, "already initialized");
-        return 2;
+        lua_pushboolean(L, true);
+        return 1;
 	}
 
 	printf("initializing robotito_ble\n");
