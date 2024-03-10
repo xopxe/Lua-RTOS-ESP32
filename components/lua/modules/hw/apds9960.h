@@ -4,7 +4,7 @@
 #define COLOR_UNKNOWN_I -1
 #define COLOR_BLACK_I -2
 #define COLOR_WHITE_I -3
-
+#define COLOR_UNUSED_I -127
 
 #define COLOR_UNKNOWN "unknown"
 #define COLOR_BLACK "black"

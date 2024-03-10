@@ -40,12 +40,12 @@ int apds9960_color_get_change_callback = LUA_REFNIL;
 TimerHandle_t apds9960_proximity_get_thresh_timer = NULL;
 int apds9960_proximity_get_thresh_callback = LUA_REFNIL;
 
-int current_color_i = -1;
-int prev_color_read = -1;
+int current_color_i = COLOR_UNUSED_I;
+int prev_color_read = COLOR_UNUSED_I;
 int saturation_threshold = 0;
 int value_threshold = 0;
 int n_colors = 0;
-color_range *color_ranges;
+color_range *color_ranges = NULL;
 
 int min_val = 20;
 int max_val = 200;
@@ -95,6 +95,9 @@ static int apds9960_set_color_table(lua_State *L){
     lua_pop(L,1);
     printf("Number of colors = %i\r\n", n_colors);
 
+    if (color_ranges!=NULL) {
+        delete[] color_ranges;
+    }
     color_ranges = new color_range [n_colors];
 
     for (int i=1; i<=n_colors; i++) {
@@ -440,9 +443,11 @@ static void callback_prox_get_thresh(TimerHandle_t xTimer) {
 
     int status;
     if (ok) {
-        if ( (prox_state==-1) 
-        || (prox_state==1 && (prox_reading < prox_threshold-prox_histeresis)) 
-        || (prox_state==0 && (prox_reading > prox_threshold)) )
+        if (  
+          (prox_state==1 && (prox_reading < prox_threshold-prox_histeresis)) 
+          || (prox_state==0 && (prox_reading > prox_threshold)) 
+          || (prox_state==-1)
+        )
         {
            //prev_state = !prev_state;
            prox_state = (prox_reading < prox_threshold) ? 0 : 1;
@@ -621,6 +626,9 @@ static int apds9960_color_enable (lua_State *L) {
             lua_pushstring(L, "failure to enable sensor");
             return 2;
         }
+        
+        current_color_i = COLOR_UNUSED_I;
+        prev_color_read = COLOR_UNUSED_I;
 
         //set timer for callback
         apds9960_color_get_color_timer = xTimerCreate("apds_color", millis / portTICK_PERIOD_MS, pdTRUE,
@@ -637,6 +645,9 @@ static int apds9960_color_enable (lua_State *L) {
         //delete timer
         xTimerStop(apds9960_color_get_color_timer, portMAX_DELAY);
 		xTimerDelete(apds9960_color_get_color_timer, portMAX_DELAY);
+		
+        current_color_i = COLOR_UNUSED_I;
+        prev_color_read = COLOR_UNUSED_I;
     }
 
     lua_pushboolean(L, true);
