@@ -40,8 +40,7 @@ int apds9960_color_get_change_callback = LUA_REFNIL;
 TimerHandle_t apds9960_proximity_get_thresh_timer = NULL;
 int apds9960_proximity_get_thresh_callback = LUA_REFNIL;
 
-int current_color_i = COLOR_UNUSED_I;
-int prev_color_read = COLOR_UNUSED_I;
+int current_color_i = COLOR_UNKNOWN_I;
 int saturation_threshold = 0;
 int value_threshold = 0;
 int n_colors = 0;
@@ -273,9 +272,9 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
         */
 
         int color_i = find_color_in_range(hsv.h, hsv.s, hsv.v);
-        //printf("----current_color_i %i    color_i %i    prev_color_read %i\r\n", current_color_i, color_i, prev_color_read);
+        //printf("----current_color_i %i    color_i %i  \r\n", current_color_i, color_i);
 
-        if (apds9960_color_get_change_callback!=LUA_REFNIL && color_i!=current_color_i && prev_color_read == color_i) {
+        if (apds9960_color_get_change_callback!=LUA_REFNIL && color_i!=current_color_i) {
             current_color_i = color_i;
 
             //prepare thread
@@ -317,9 +316,7 @@ static void callback_sw_get_color(TimerHandle_t xTimer) {
                 //luaL_error(TL, msg);
             
             }
-            prev_color_read = color_i;
         } else {
-            prev_color_read = color_i;
             return; //no changes
         }
     } else {
@@ -627,8 +624,7 @@ static int apds9960_color_enable (lua_State *L) {
             return 2;
         }
         
-        current_color_i = COLOR_UNUSED_I;
-        prev_color_read = COLOR_UNUSED_I;
+        current_color_i = COLOR_UNKNOWN_I;
 
         //set timer for callback
         apds9960_color_get_color_timer = xTimerCreate("apds_color", millis / portTICK_PERIOD_MS, pdTRUE,
@@ -646,8 +642,7 @@ static int apds9960_color_enable (lua_State *L) {
         xTimerStop(apds9960_color_get_color_timer, portMAX_DELAY);
 		xTimerDelete(apds9960_color_get_color_timer, portMAX_DELAY);
 		
-        current_color_i = COLOR_UNUSED_I;
-        prev_color_read = COLOR_UNUSED_I;
+        current_color_i = COLOR_UNKNOWN_I;
     }
 
     lua_pushboolean(L, true);
