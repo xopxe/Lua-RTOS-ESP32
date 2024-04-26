@@ -58,6 +58,8 @@
 #include "modules.h"
 #include "luartos.h"
 #include <time.h>
+#include <stdbool.h>
+
 
 #include <drivers/gpio.h>
 #include <drivers/cpu.h>
@@ -76,6 +78,7 @@ char checksumTag[2]="";
 int contTag=0;
 int contNil=0;
 
+int requiresNone=1;
 
 int contReadBytes=0;
 
@@ -146,6 +149,19 @@ static int luart_setpins(lua_State* L) {
 	return 0;
 }
 
+static int set_requiresNone(lua_State* L) {
+	driver_error_t *error;
+
+	bool requires = lua_toboolean(L, 1);
+    if (requires){
+        requiresNone=1;
+    } else {
+        requiresNone=0;
+    }
+
+	return 0;
+}
+
 static int luart_read( lua_State* L ) {
     int res, c;
     
@@ -171,25 +187,16 @@ static int luart_read( lua_State* L ) {
     
 }
 
-static unsigned char calculateChecksum(const char *hexInput) {
-    unsigned char checksum = 0;
-    size_t length = strlen(hexInput);
-
-    if (length % 2 != 0) {
-        printf("Input length must be even.\n");
-        return 0;
+bool verify_checksum(char *tag, char *checksumTag) {
+    unsigned short calculated_checksum = 0;
+    for(int i = 0; i < strlen(tag); i += 2) {
+        unsigned short byte_pair = (tag[i] << 8) | tag[i+1];
+        calculated_checksum ^= byte_pair;
     }
 
-    for (size_t i = 0; i < length; i += 2) { // largo de datos a hacer el checksum y voy recorriendo de 2 en 2
-        unsigned char byte;
-        if (sscanf(hexInput + i, "%2hhx", &byte) != 1) { // agarro dos unsigned char y los pongo en byte
-            printf("Invalid hex input.\n");
-            return 0;
-        }
-        checksum ^= byte; //hago el XOR bit a bit entre checksum y byte y lo almaceno en checksum
-    }
+    unsigned short checksum_bytes = (checksumTag[0] << 8) | checksumTag[1];
 
-    return checksum;
+    return calculated_checksum == checksum_bytes;
 }
 
 static void callback_rfid_get_tag(TimerHandle_t xTimer) {
@@ -229,7 +236,8 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
             if(!res){
 
                 contNil = contNil + 1;
-                if (contNil == 200 ){
+                if (contNil == 110 ){
+                    printf("NONE DETECTED");
                     rfid_detected=false;
                     lua_pushstring(TL, "none");
                     status = lua_pcall(TL, 1, 0, 0);
@@ -242,9 +250,13 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
                     contTag=0;
                 }  
             } else {
-
-                contNil = 0;
-                uart_consume(id);
+                if (requiresNone==0){
+                    rfid_detected = false;
+                } else {
+                    contNil = 0;
+                    uart_consume(id);
+                }
+                
 
             }
             
@@ -258,21 +270,23 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
                        headByteRead = 1;
                        contReadBytes=0;
                     } else if (c == 0x00000003){ //fin del tag
+                        /*printf("verificar checksum\n");
+                        bool checksum = verify_checksum(tag, checksumTag);
+                        printf("Your boolean variable is: %s", checksum ? "true" : "false");*/
+
                         if (contTag==0){
                             strncpy( lastTag, tag, sizeof(tag));
                             contTag= contTag+1;
                             memset(tag, '\0', sizeof(tag));
                             memset(checksumTag, '\0', sizeof(checksumTag));
-
-                           
                         } else {
                             if(strncmp(lastTag, tag, sizeof(tag)) == 0){
+                                // si el tag es igual al anterior sumo uno al contador
                                 contTag= contTag+1;
                                 memset(tag, '\0', sizeof(tag));
                                 memset(checksumTag, '\0', sizeof(checksumTag));
-
-
                             } else {
+                                // si el tag es distinto reincio los contadores a 0
                                 contTag=0;
                                 memset(tag, '\0', sizeof(tag));
                                 memset(lastTag, '\0', sizeof(tag));
@@ -319,9 +333,7 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
                 }
                
             } else{
-               // printf("a");
                 contTag=0;
-
             } 
         }
         
@@ -388,6 +400,7 @@ static const luaL_Reg rfid2[] = {
   {"set_callback", rfid_get_tag},
   {"enable", rfid_enable},
   {"read_sensor",luart_read},
+  {"requires_none",set_requiresNone},
   {NULL, NULL}
 };
 
