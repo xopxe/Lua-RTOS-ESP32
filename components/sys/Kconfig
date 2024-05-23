@@ -1901,6 +1901,10 @@ menu "Lua RTOS"
             config LUA_RTOS_LUA_USE_ULP
                bool "Include ULP (Ultra Low Power coprocessor) module in build"
                default y
+               
+            config LUA_RTOS_LUA_USE_RFID
+               bool "Include rfid module in build"
+               default n
          endmenu
       endmenu
 endmenu
