@@ -241,7 +241,7 @@ static void motor_control_callback(TimerHandle_t xTimer) {
             }
         }
         if (rotation_limit_set) {
-        float angle = fabs(odometry.phi - limit_reference.phi);
+            float angle = fabs(odometry.phi - limit_reference.phi);
             if ( angle >= rotation_limit) {
                 trigger_distance = true;
             }
