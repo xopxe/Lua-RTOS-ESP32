@@ -65,10 +65,23 @@
 #include <drivers/cpu.h>
 #include <drivers/uart.h>
 
+#define RFID_UART_ID 2
+#define PIO_RX 4
+#define PIO_TX 17
+
+#define BAUDS 9600 
+#define DATABITS 8
+#define PARITY 0
+#define STOP_BITS 1
+
+
+
+
 TimerHandle_t rfid_get_tag_timer;
 int rfid_get_tag_callback = LUA_REFNIL;
-
 int rfid_detected = 0;
+
+static bool initialized = false;
 
 char tag[10]="";
 char lastTag[10]="";
@@ -85,72 +98,39 @@ int contReadBytes=0;
 int headByteRead =0;
 
 
-
-static int rfid_init (lua_State *L) {
-  printf("initializing rfid\n");
-  lua_pushstring(L, "init rfid");
-  lua_pushboolean(L, true);
-  return 2;
-}
-
 static int uart_exists(int id) {
     return ((id >= CPU_FIRST_UART) && (id <= CPU_LAST_UART));
 }
 
+static int rfid_init (lua_State *L) {
 
-static int luart_attach( lua_State* L ) {
-	driver_error_t *error;
-	int flags = UART_FLAG_WRITE | UART_FLAG_READ;
+    if (!initialized) {
+        driver_error_t *error;
+        if ((error = uart_pin_map(RFID_UART_ID, PIO_RX, PIO_TX))) {
+            return luaL_driver_error(L, error);
+        }
 
-	int id = luaL_checkinteger(L, 1);
-    int bauds = luaL_checkinteger(L, 2);
-    int databits = luaL_checkinteger(L, 3);
-    int parity = luaL_checkinteger(L, 4);
-    int stop_bits = luaL_checkinteger(L, 5);
-    int buffer = luaL_optinteger(L, 6, 1024);
+        int flags = UART_FLAG_WRITE | UART_FLAG_READ;
+        int buffer = luaL_optinteger(L, 6, 1024);
+        // Setup
+        error = uart_init(RFID_UART_ID, BAUDS, DATABITS, PARITY, STOP_BITS, flags, buffer);
+        if (error) {
+            return luaL_driver_error(L, error);
+        }
 
-	if (lua_gettop(L) == 7) {
-		flags = luaL_checkinteger(L, 7);
-	}
+        error = uart_setup_interrupts(RFID_UART_ID);
+        if (error) {
+            return luaL_driver_error(L, error);
+        }
 
-    // Setup
-    error = uart_init(id, bauds, databits, parity, stop_bits, flags, buffer);
-    if (error) {
-        return luaL_driver_error(L, error);
-    }
-
-    error = uart_setup_interrupts(id);
-    if (error) {
-        return luaL_driver_error(L, error);
-    }
-
-    int real_bauds = uart_get_br(id);
-
-    if (real_bauds != 0) {
-        lua_pushinteger(L, real_bauds);
+        initialized = true;
+        lua_pushboolean(L, true);
         return 1;
-    } else {
-        return 0;
     }
-}
-
-
-static int luart_setpins(lua_State* L) {
-	driver_error_t *error;
-
-	int id = luaL_checkinteger(L, 1);
-	int rx = luaL_checkinteger(L, 2);
-	int tx = luaL_checkinteger(L, 3);
-
-	if ((error = uart_pin_map(id, rx, tx))) {
-	    return luaL_driver_error(L, error);
-	}
-
-	return 0;
+    return 1;
 }
 
 static int set_requiresNone(lua_State* L) {
-	//driver_error_t *error;
 
 	bool requires = lua_toboolean(L, 1);
     if (requires){
@@ -161,7 +141,7 @@ static int set_requiresNone(lua_State* L) {
 
 	return 0;
 }
-
+/*
 static int luart_read( lua_State* L ) {
     int res, c;
     
@@ -182,9 +162,7 @@ static int luart_read( lua_State* L ) {
         lua_pushnil(L);
     }
         
-    return 1;
-
-    
+    return 1;    
 }
 
 bool verify_checksum(char *tag, char *checksumTag) {
@@ -197,7 +175,7 @@ bool verify_checksum(char *tag, char *checksumTag) {
     unsigned short checksum_bytes = (checksumTag[0] << 8) | checksumTag[1];
 
     return calculated_checksum == checksum_bytes;
-}
+}*/
 
 static void callback_rfid_get_tag(TimerHandle_t xTimer) {
     lua_State *TL;
@@ -207,26 +185,29 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
     int timeout, res, c;
     int status;
 
-
-    L = pvGetLuaState();
-    TL = lua_newthread(L);
-    tref = luaL_ref(L, LUA_REGISTRYINDEX);
-    lua_rawgeti(L, LUA_REGISTRYINDEX, rfid_get_tag_callback);
-    lua_xmove(L, TL, 1);
-    
-
     if (!uart_exists(id) || !uart_is_setup(id)) {
+        L = pvGetLuaState();
+        TL = lua_newthread(L);
+        tref = luaL_ref(L, LUA_REGISTRYINDEX);
+        lua_rawgeti(L, LUA_REGISTRYINDEX, rfid_get_tag_callback);
+        lua_xmove(L, TL, 1);
+
         lua_pushnil(TL);
-        lua_pushstring(TL, "Error, UART does not exist or is not setup");
+        lua_pushstring(TL, "Erro, UART does not exist or is not setup");
         status = lua_pcall(TL, 2, 0, 0);
-        memset(tag, '\0', sizeof(tag));
-        memset(checksumTag, '\0', sizeof(checksumTag));
+        luaL_unref(TL, LUA_REGISTRYINDEX, tref);
 
         if (status != LUA_OK) {
             const char *msg = lua_tostring(TL, -1);
-            lua_writestringerror("error in rfid callback %s\n", msg);
+            lua_writestringerror("error in rfid callback not exist %s\n", msg);
             lua_pop(TL, 1);		
-        }    
+        }   
+
+        memset(tag, '\0', sizeof(tag));
+        memset(checksumTag, '\0', sizeof(checksumTag)); 
+        printf("LL: error ouart no configurado\n");
+
+
     } else {
         timeout = 0;
         res = uart_read(id, (char *)&c, timeout);
@@ -237,17 +218,27 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
 
                 contNil = contNil + 1;
                 if (contNil == 110 ){
-                    printf("NONE DETECTED");
+                    L = pvGetLuaState();
+                    TL = lua_newthread(L);
+                    tref = luaL_ref(L, LUA_REGISTRYINDEX);
+                    lua_rawgeti(L, LUA_REGISTRYINDEX, rfid_get_tag_callback);
+                    lua_xmove(L, TL, 1);
+
                     rfid_detected=false;
                     lua_pushstring(TL, "none");
                     status = lua_pcall(TL, 1, 0, 0);
+                    
+                    luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+
                     if (status != LUA_OK) {
                         const char *msg = lua_tostring(TL, -1);
-                        lua_writestringerror("error in rfid callback %s\n", msg);
+                        lua_writestringerror("error in rfid callback none %s\n", msg);
                         lua_pop(TL, 1);
                     }
                     contNil=0;
                     contTag=0;
+                    printf("LL: none detected\n");
+
                 }  
             } else {
                 if (requiresNone==0){
@@ -263,7 +254,6 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
         } else { //not rfid_detected
             if(res){
                 c = c & 0x000000ff;
-                //char *pr = &c;
                 printf( "%d", c );
                 if ((((tag[0] == '\0') && c == 0x00000002) || headByteRead)){
                     if (c == 0x00000002){ // principio del tag
@@ -279,18 +269,24 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
                             contTag= contTag+1;
                             memset(tag, '\0', sizeof(tag));
                             memset(checksumTag, '\0', sizeof(checksumTag));
+                            printf("LL: scnd tag det\n");
+
                         } else {
                             if(strncmp(lastTag, tag, sizeof(tag)) == 0){
                                 // si el tag es igual al anterior sumo uno al contador
                                 contTag= contTag+1;
                                 memset(tag, '\0', sizeof(tag));
                                 memset(checksumTag, '\0', sizeof(checksumTag));
+                                printf("LL: fisrt tag det\n");
+
                             } else {
                                 // si el tag es distinto reincio los contadores a 0
                                 contTag=0;
                                 memset(tag, '\0', sizeof(tag));
                                 memset(lastTag, '\0', sizeof(tag));
                                 memset(checksumTag, '\0', sizeof(checksumTag));
+                                printf("LL: tag distinto al anterior\n");
+
 
                             }
                         }    
@@ -305,23 +301,30 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
                         }
                     }
                     if (contTag==2){
-                        printf("TAG DETECTED");
+                        L = pvGetLuaState();
+                        TL = lua_newthread(L);
+                        tref = luaL_ref(L, LUA_REGISTRYINDEX);
+                        lua_rawgeti(L, LUA_REGISTRYINDEX, rfid_get_tag_callback);
+                        lua_xmove(L, TL, 1);
 
                         lua_pushstring (TL, lastTag);
                         status = lua_pcall(TL, 1, 0, 0);
+                        
+                        luaL_unref(TL, LUA_REGISTRYINDEX, tref);
+                        if (status != LUA_OK) {
+                            const char *msg = lua_tostring(TL, -1);
+                            lua_writestringerror("error in rfid callback tag %s\n", msg);
+                            lua_pop(TL, 1);
+                        }
                         memset(tag, '\0', sizeof(tag));
                         memset(lastTag, '\0', sizeof(lastTag));
                         memset(checksumTag, '\0', sizeof(checksumTag));
-
-                        if (status != LUA_OK) {
-                            const char *msg = lua_tostring(TL, -1);
-                            lua_writestringerror("error in rfid callback %s\n", msg);
-                            lua_pop(TL, 1);
-                        }
                         rfid_detected=true;
                         contTag=0;
                         contNil=0;
                         uart_consume(id);
+                        printf("LL: tag detected\n");
+
                     }
 
                 }else{
@@ -337,9 +340,7 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
             } 
         }
         
-        
     }
-    luaL_unref(TL, LUA_REGISTRYINDEX, tref);
 
     
 }
@@ -352,6 +353,8 @@ static int rfid_get_tag (lua_State *L) {
         luaL_checktype(L, 1, LUA_TFUNCTION);
         lua_pushvalue(L, 1);
         rfid_get_tag_callback = luaL_ref(L, LUA_REGISTRYINDEX);
+        printf("LL: callback registrado\n");
+
     } else {
         if (rfid_get_tag_callback==LUA_REFNIL) {
             lua_pushnil(L);
@@ -379,12 +382,17 @@ static int rfid_enable (lua_State *L) {
         rfid_get_tag_timer = xTimerCreate("rfid", millis / portTICK_PERIOD_MS, pdTRUE,
                 (void *)rfid_get_tag_timer, callback_rfid_get_tag);
             xTimerStart(rfid_get_tag_timer, 0);
+        printf("LL: rfid enable\n");
+
     }else {
 
         //delete timer
         xTimerStop(rfid_get_tag_timer, portMAX_DELAY);
-	      xTimerDelete(rfid_get_tag_timer, portMAX_DELAY);
+	    xTimerDelete(rfid_get_tag_timer, portMAX_DELAY);
+        luaL_unref(L, LUA_REGISTRYINDEX, rfid_get_tag_callback); // Elimina la referencia
         rfid_get_tag_callback = LUA_REFNIL;
+        printf("LL: rfid disable, call unref\n");
+                        
     }
    
 
@@ -395,11 +403,9 @@ static int rfid_enable (lua_State *L) {
 
 static const luaL_Reg rfid2[] = {
   {"init", rfid_init},
-  {"init_sensor", luart_attach},
-  {"setpins", luart_setpins},
   {"set_callback", rfid_get_tag},
   {"enable", rfid_enable},
-  {"read_sensor",luart_read},
+  //{"read_sensor",luart_read},
   {"requires_none",set_requiresNone},
   {NULL, NULL}
 };
