@@ -59,8 +59,6 @@
 #include "luartos.h"
 #include <time.h>
 #include <stdbool.h>
-
-
 #include <drivers/gpio.h>
 #include <drivers/cpu.h>
 #include <drivers/uart.h>
@@ -73,9 +71,6 @@
 #define DATABITS 8
 #define PARITY 0
 #define STOP_BITS 1
-
-
-
 
 TimerHandle_t rfid_get_tag_timer;
 int rfid_get_tag_callback = LUA_REFNIL;
@@ -90,11 +85,8 @@ char checksumTag[2]="";
 
 int contTag=0;
 int contNil=0;
-
 int requiresNone=1;
-
 int contReadBytes=0;
-
 int headByteRead =0;
 
 
@@ -141,41 +133,7 @@ static int set_requiresNone(lua_State* L) {
 
 	return 0;
 }
-/*
-static int luart_read( lua_State* L ) {
-    int res, c;
-    
-    // Some integrity checks
-    if (!uart_exists(2)) {
-        return luaL_error(L, "UART%d does not exist", 2);
-    }
-    
-    if (!uart_is_setup(2)) {
-        return luaL_error(L, "UART%d is not setup", 2);
-    }
-    
 
-    res = uart_read(2, (char *)&c, 5);
-    if (res) {
-        lua_pushinteger(L, c & 0x000000ff);
-    } else {
-        lua_pushnil(L);
-    }
-        
-    return 1;    
-}
-
-bool verify_checksum(char *tag, char *checksumTag) {
-    unsigned short calculated_checksum = 0;
-    for(int i = 0; i < strlen(tag); i += 2) {
-        unsigned short byte_pair = (tag[i] << 8) | tag[i+1];
-        calculated_checksum ^= byte_pair;
-    }
-
-    unsigned short checksum_bytes = (checksumTag[0] << 8) | checksumTag[1];
-
-    return calculated_checksum == checksum_bytes;
-}*/
 
 static void callback_rfid_get_tag(TimerHandle_t xTimer) {
     lua_State *TL;
@@ -205,9 +163,7 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
 
         memset(tag, '\0', sizeof(tag));
         memset(checksumTag, '\0', sizeof(checksumTag)); 
-        printf("LL: error ouart no configurado\n");
-
-
+        
     } else {
         timeout = 0;
         res = uart_read(id, (char *)&c, timeout);
@@ -256,13 +212,10 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
                 c = c & 0x000000ff;
                 printf( "%d", c );
                 if ((((tag[0] == '\0') && c == 0x00000002) || headByteRead)){
-                    if (c == 0x00000002){ // principio del tag
+                    if (c == 0x00000002){ // start of tag
                        headByteRead = 1;
                        contReadBytes=0;
-                    } else if (c == 0x00000003){ //fin del tag
-                        /*printf("verificar checksum\n");
-                        bool checksum = verify_checksum(tag, checksumTag);
-                        printf("Your boolean variable is: %s", checksum ? "true" : "false");*/
+                    } else if (c == 0x00000003){ //end of tag
 
                         if (contTag==0){
                             strncpy( lastTag, tag, sizeof(tag));
@@ -273,14 +226,14 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
 
                         } else {
                             if(strncmp(lastTag, tag, sizeof(tag)) == 0){
-                                // si el tag es igual al anterior sumo uno al contador
+                                // if is the same tag increment the counter
                                 contTag= contTag+1;
                                 memset(tag, '\0', sizeof(tag));
                                 memset(checksumTag, '\0', sizeof(checksumTag));
                                 printf("LL: fisrt tag det\n");
 
                             } else {
-                                // si el tag es distinto reincio los contadores a 0
+                                // if is a different tag, reset the counter
                                 contTag=0;
                                 memset(tag, '\0', sizeof(tag));
                                 memset(lastTag, '\0', sizeof(tag));
@@ -292,7 +245,7 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
                         }    
                         headByteRead = 0;
  
-                    } else { // estoy en el medio
+                    } else { // middle of tag
                         char *pChar = (char*)&c;
                         if (contReadBytes>10){
                             strcat(checksumTag, pChar);
@@ -300,7 +253,7 @@ static void callback_rfid_get_tag(TimerHandle_t xTimer) {
                             strcat(tag, pChar);
                         }
                     }
-                    if (contTag==2){
+                    if (contTag==2){ //if the same tag is detected 2 times is a valid lecture so send to de upper layer
                         L = pvGetLuaState();
                         TL = lua_newthread(L);
                         tref = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -353,7 +306,6 @@ static int rfid_get_tag (lua_State *L) {
         luaL_checktype(L, 1, LUA_TFUNCTION);
         lua_pushvalue(L, 1);
         rfid_get_tag_callback = luaL_ref(L, LUA_REGISTRYINDEX);
-        printf("LL: callback registrado\n");
 
     } else {
         if (rfid_get_tag_callback==LUA_REFNIL) {
@@ -371,31 +323,23 @@ static int rfid_get_tag (lua_State *L) {
 static int rfid_enable (lua_State *L) {
     bool enable = lua_toboolean(L, 1);
     if (enable) {
-        uint32_t millis = luaL_checkinteger( L, 1 ); //segundo param (period)
-        if (millis < 1) { //si me mandan periodo invalido tiro error 
+        uint32_t millis = luaL_checkinteger( L, 1 ); //period
+        if (millis < 1) { //if period is less than 1 send error to upper layer
             lua_pushnil(L);
             lua_pushstring(L, "invalid period");
             return 2;
         }
-        //millis = 10;
-            //set timer for callback
+        //set timer for callback
         rfid_get_tag_timer = xTimerCreate("rfid", millis / portTICK_PERIOD_MS, pdTRUE,
                 (void *)rfid_get_tag_timer, callback_rfid_get_tag);
             xTimerStart(rfid_get_tag_timer, 0);
-        printf("LL: rfid enable\n");
-
     }else {
-
-        //delete timer
+        //delete timer to disable
         xTimerStop(rfid_get_tag_timer, portMAX_DELAY);
 	    xTimerDelete(rfid_get_tag_timer, portMAX_DELAY);
-        luaL_unref(L, LUA_REGISTRYINDEX, rfid_get_tag_callback); // Elimina la referencia
-        rfid_get_tag_callback = LUA_REFNIL;
-        printf("LL: rfid disable, call unref\n");
-                        
+        luaL_unref(L, LUA_REGISTRYINDEX, rfid_get_tag_callback);
+        rfid_get_tag_callback = LUA_REFNIL;                        
     }
-   
-
     lua_pushboolean(L, true);
 	return 1;
 }
@@ -405,7 +349,6 @@ static const luaL_Reg rfid2[] = {
   {"init", rfid_init},
   {"set_callback", rfid_get_tag},
   {"enable", rfid_enable},
-  //{"read_sensor",luart_read},
   {"requires_none",set_requiresNone},
   {NULL, NULL}
 };
